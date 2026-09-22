@@ -1,0 +1,6 @@
+{
+  "name": "Holiday Wishes",
+  "description": "Create, view, save, and share beautiful Christmas and New Year wishes, greeting cards, and messages.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
