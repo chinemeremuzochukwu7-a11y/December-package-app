@@ -8,14 +8,19 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import com.example.model.WishCategory
 import com.example.ui.screens.AiWishGeneratorScreen
+import com.example.ui.screens.AlarmReminderScreen
+import com.example.ui.screens.BirthdayTrackerScreen
 import com.example.ui.screens.CardsScreen
 import com.example.ui.screens.CreateWishScreen
 import com.example.ui.screens.CustomizeCardScreen
+import com.example.ui.screens.ExpensesTrackerScreen
 import com.example.ui.screens.FavoritesScreen
 import com.example.ui.screens.HomeScreen
+import com.example.ui.screens.MealTrackerScreen
 import com.example.ui.screens.MyCardsScreen
 import com.example.ui.screens.SettingsScreen
 import com.example.ui.screens.WishesScreen
+import com.example.ui.subscription.ProSubscriptionScreen
 import com.example.ui.viewmodel.HolidayViewModel
 
 @Composable
@@ -56,6 +61,31 @@ fun HolidayNavHost(
                 onNavigateToWishesCategory = { category ->
                     viewModel.selectCategory(category)
                     navController.navigate(Screen.Wishes.route) {
+                        launchSingleTop = true
+                    }
+                },
+                onNavigateToPro = {
+                    navController.navigate(Screen.ProSubscription.route) {
+                        launchSingleTop = true
+                    }
+                },
+                onNavigateToBirthdays = {
+                    navController.navigate(Screen.BirthdayTracker.route) {
+                        launchSingleTop = true
+                    }
+                },
+                onNavigateToExpenses = {
+                    navController.navigate(Screen.ExpensesTracker.route) {
+                        launchSingleTop = true
+                    }
+                },
+                onNavigateToMeals = {
+                    navController.navigate(Screen.MealTracker.route) {
+                        launchSingleTop = true
+                    }
+                },
+                onNavigateToAlarms = {
+                    navController.navigate(Screen.AlarmReminder.route) {
                         launchSingleTop = true
                     }
                 }
@@ -146,7 +176,60 @@ fun HolidayNavHost(
         }
 
         composable(Screen.Settings.route) {
-            SettingsScreen(viewModel = viewModel)
+            SettingsScreen(
+                viewModel = viewModel,
+                onNavigateToPro = {
+                    navController.navigate(Screen.ProSubscription.route) {
+                        launchSingleTop = true
+                    }
+                },
+                onNavigateToCustomerCenter = {
+                    navController.navigate(Screen.CustomerCenter.route) {
+                        launchSingleTop = true
+                    }
+                }
+            )
+        }
+
+        composable(Screen.ProSubscription.route) {
+            ProSubscriptionScreen(
+                onDismiss = {
+                    navController.popBackStack()
+                },
+                initialTab = 0
+            )
+        }
+
+        composable(Screen.CustomerCenter.route) {
+            ProSubscriptionScreen(
+                onDismiss = {
+                    navController.popBackStack()
+                },
+                initialTab = 1
+            )
+        }
+
+        composable(Screen.BirthdayTracker.route) {
+            BirthdayTrackerScreen(
+                onNavigateToAiWishForPerson = { name, relationship ->
+                    viewModel.setAiRecipientName(name)
+                    navController.navigate(Screen.AiWishGenerator.route) {
+                        launchSingleTop = true
+                    }
+                }
+            )
+        }
+
+        composable(Screen.ExpensesTracker.route) {
+            ExpensesTrackerScreen()
+        }
+
+        composable(Screen.MealTracker.route) {
+            MealTrackerScreen()
+        }
+
+        composable(Screen.AlarmReminder.route) {
+            AlarmReminderScreen()
         }
     }
 }

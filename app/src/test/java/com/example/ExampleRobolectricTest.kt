@@ -100,4 +100,47 @@ class ExampleRobolectricTest {
         assertTrue(frResult.isSuccess)
         assertTrue(frResult.getOrNull()!!.text.contains("Famille Dupont"))
     }
+
+    @Test
+    fun `verify RevenueCat configuration and entitlement identifiers`() {
+        assertEquals("holiday_wishes_pro", com.example.data.subscription.SubscriptionManager.ENTITLEMENT_HOLIDAY_WISHES_PRO)
+        assertEquals("yearly", com.example.data.subscription.SubscriptionManager.PRODUCT_YEARLY)
+        assertEquals("monthly", com.example.data.subscription.SubscriptionManager.PRODUCT_MONTHLY)
+    }
+
+    @Test
+    fun `verify tracker calculations and date helpers`() {
+        val today = java.util.Calendar.getInstance()
+        val currentMonth = today.get(java.util.Calendar.MONTH) + 1
+        val currentDay = today.get(java.util.Calendar.DAY_OF_MONTH)
+
+        // Today's birthday has 0 days until birthday
+        val daysToday = com.example.data.repository.TrackersRepository.daysUntilBirthday(currentMonth, currentDay)
+        assertEquals(0, daysToday)
+
+        val turningAge = com.example.data.repository.TrackersRepository.calculateTurningAge(2000, currentMonth, currentDay)
+        assertNotNull(turningAge)
+        assertTrue(turningAge!! >= 24)
+
+        val todayDateString = com.example.data.repository.TrackersRepository.getTodayDateString()
+        assertTrue(todayDateString.matches(Regex("""\d{4}-\d{2}-\d{2}""")))
+    }
+
+    @Test
+    fun `verify alarm entity and receiver actions`() {
+        val alarm = com.example.data.local.AlarmEntity(
+            title = "Christmas Morning Wakeup",
+            type = "ALARM",
+            hour = 7,
+            minute = 0,
+            repeatMode = "Daily"
+        )
+        assertEquals("Christmas Morning Wakeup", alarm.title)
+        assertEquals("ALARM", alarm.type)
+        assertEquals(7, alarm.hour)
+        assertEquals(0, alarm.minute)
+        assertTrue(alarm.isEnabled)
+        assertEquals("com.example.ACTION_ALARM_TRIGGER", com.example.receiver.AlarmReceiver.ACTION_TRIGGER_ALARM)
+        assertEquals("com.example.ACTION_DISMISS_ALARM", com.example.receiver.AlarmReceiver.ACTION_DISMISS_ALARM)
+    }
 }

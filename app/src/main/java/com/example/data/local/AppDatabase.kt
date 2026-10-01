@@ -6,14 +6,26 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 
 @Database(
-    entities = [FavoriteWishEntity::class, SavedCardEntity::class, AiGeneratedWishEntity::class],
-    version = 3,
+    entities = [
+        FavoriteWishEntity::class,
+        SavedCardEntity::class,
+        AiGeneratedWishEntity::class,
+        BirthdayEntity::class,
+        ExpenseEntity::class,
+        MealEntity::class,
+        AlarmEntity::class
+    ],
+    version = 5,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun favoriteWishDao(): FavoriteWishDao
     abstract fun savedCardDao(): SavedCardDao
     abstract fun aiGeneratedWishDao(): AiGeneratedWishDao
+    abstract fun birthdayDao(): BirthdayDao
+    abstract fun expenseDao(): ExpenseDao
+    abstract fun mealDao(): MealDao
+    abstract fun alarmDao(): AlarmDao
 
     companion object {
         @Volatile

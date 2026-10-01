@@ -45,6 +45,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.SupportAgent
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import com.example.data.subscription.SubscriptionManager
 import com.example.ui.theme.HolidayCrimson
 import com.example.ui.viewmodel.HolidayViewModel
 import com.example.ui.viewmodel.SettingsDialogType
@@ -52,8 +64,11 @@ import com.example.ui.viewmodel.SettingsDialogType
 @Composable
 fun SettingsScreen(
     viewModel: HolidayViewModel,
+    onNavigateToPro: () -> Unit = {},
+    onNavigateToCustomerCenter: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val isPro by SubscriptionManager.isPro.collectAsState()
     val activeDialog by viewModel.activeDialog.collectAsStateWithLifecycle()
     val notificationsEnabled by viewModel.notificationsEnabled.collectAsStateWithLifecycle()
     val countdownEnabled by viewModel.countdownEnabled.collectAsStateWithLifecycle()
@@ -66,6 +81,86 @@ fun SettingsScreen(
             .padding(16.dp)
             .testTag("settings_screen")
     ) {
+        // Holiday Wishes Pro Membership Card
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onNavigateToPro() }
+                .testTag("settings_pro_banner"),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.Transparent)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(
+                        brush = Brush.linearGradient(
+                            colors = if (isPro) {
+                                listOf(Color(0xFF2E7D32), Color(0xFF1B5E20))
+                            } else {
+                                listOf(Color(0xFF8B0000), Color(0xFFC41E3A), Color(0xFFD4AF37))
+                            }
+                        )
+                    )
+                    .padding(18.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(CircleShape)
+                            .background(Color.White.copy(alpha = 0.2f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(text = if (isPro) "👑" else "✨", fontSize = 24.sp)
+                    }
+
+                    Spacer(modifier = Modifier.width(14.dp))
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = if (isPro) "Holiday Wishes Pro Active" else "Holiday Wishes Pro",
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.ExtraBold,
+                                color = Color.White
+                            )
+                        )
+                        Text(
+                            text = if (isPro)
+                                "Entitlement: holiday_wishes_pro active"
+                            else
+                                "Unlock VIP cards, unlimited AI, and ad-free experience",
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                color = Color.White.copy(alpha = 0.9f)
+                            )
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    Button(
+                        onClick = onNavigateToPro,
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color.White,
+                            contentColor = Color(0xFF8B0000)
+                        )
+                    ) {
+                        Text(
+                            text = if (isPro) "View" else "Upgrade",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
         Text(
             text = "Settings & Preferences",
             style = MaterialTheme.typography.titleMedium,
@@ -110,6 +205,43 @@ fun SettingsScreen(
                     isChecked = countdownEnabled,
                     onCheckedChange = { viewModel.toggleCountdown() },
                     testTag = "settings_countdown_toggle"
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        Text(
+            text = "Subscription & Support",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onBackground,
+            modifier = Modifier.padding(bottom = 12.dp)
+        )
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
+        ) {
+            Column {
+                SettingsClickableItem(
+                    icon = Icons.Default.AutoAwesome,
+                    title = "Pro Membership & Plans",
+                    subtitle = if (isPro) "Active (holiday_wishes_pro)" else "Upgrade to Yearly or Monthly",
+                    onClick = onNavigateToPro,
+                    testTag = "settings_plans_item"
+                )
+
+                SettingsDivider()
+
+                SettingsClickableItem(
+                    icon = Icons.Default.SupportAgent,
+                    title = "Customer Center",
+                    subtitle = "Manage billing, request refunds, or get help",
+                    onClick = onNavigateToCustomerCenter,
+                    testTag = "settings_customer_center_item"
                 )
             }
         }

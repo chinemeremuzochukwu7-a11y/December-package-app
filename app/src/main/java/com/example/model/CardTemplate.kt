@@ -29,7 +29,8 @@ data class CardTemplate(
     val secondaryColorHex: Long,
     val accentColorHex: Long,
     val badge: String = "Featured",
-    val decorationStyle: CardDecorationStyle = CardDecorationStyle.STARS
+    val decorationStyle: CardDecorationStyle = CardDecorationStyle.STARS,
+    val isPro: Boolean = false
 )
 
 data class CustomCardData(

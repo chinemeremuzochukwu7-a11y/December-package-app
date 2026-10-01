@@ -12,6 +12,8 @@ import com.example.data.local.SavedCardEntity
 import com.example.data.repository.AiWishRepository
 import com.example.data.repository.MockAiWishRepository
 import com.example.data.repository.CardTemplatesRepository
+import com.example.data.repository.MonetizationManager
+import com.example.data.repository.PricingTiers
 import com.example.data.repository.WishGenerator
 import com.example.data.repository.WishesRepository
 import com.example.model.AiLanguage
@@ -48,6 +50,11 @@ class HolidayViewModel(application: Application) : AndroidViewModel(application)
     private val db = AppDatabase.getDatabase(application)
     private val favoriteRepository = FavoriteRepository(db.favoriteWishDao())
     private val cardRepository = CardRepository(db.savedCardDao())
+    private val monetizationManager = MonetizationManager.getInstance(application)
+
+    val isProUser: StateFlow<Boolean> = monetizationManager.isProUser
+    val isVipUser: StateFlow<Boolean> = monetizationManager.isVipUser
+    val unlockedCardIds: StateFlow<Set<String>> = monetizationManager.unlockedCardIds
 
     // All favorites from Room DB
     val favorites: StateFlow<List<FavoriteWishEntity>> = favoriteRepository.allFavorites
@@ -513,5 +520,21 @@ class HolidayViewModel(application: Application) : AndroidViewModel(application)
         _cardTextAlign.value = "Center"
         _showRecipient.value = recipientName.isNotBlank()
         _showSender.value = true
+    }
+
+    fun isCardUnlocked(template: CardTemplate): Boolean {
+        return monetizationManager.isCardUnlocked(template.id, template.isPro)
+    }
+
+    fun purchaseProTier(tierId: String): Boolean {
+        return monetizationManager.completePurchase(tierId)
+    }
+
+    fun unlockCardViaRewardedAd(cardId: String) {
+        monetizationManager.unlockCardViaRewardedAd(cardId)
+    }
+
+    fun restorePurchases(): Boolean {
+        return monetizationManager.restorePurchases()
     }
 }

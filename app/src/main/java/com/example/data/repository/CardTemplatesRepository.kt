@@ -67,8 +67,9 @@ object CardTemplatesRepository {
             primaryColorHex = 0xFF160F30,
             secondaryColorHex = 0xFF322359,
             accentColorHex = 0xFFFFDF00,
-            badge = "Guiding Star",
-            decorationStyle = CardDecorationStyle.STARS
+            badge = "👑 PRO Gold",
+            decorationStyle = CardDecorationStyle.STARS,
+            isPro = true
         ),
         CardTemplate(
             id = "xm_card_06_santa_spirit",
@@ -103,8 +104,9 @@ object CardTemplatesRepository {
             primaryColorHex = 0xFF580C1F,
             secondaryColorHex = 0xFF8A1C36,
             accentColorHex = 0xFFFFD700,
-            badge = "Ornaments",
-            decorationStyle = CardDecorationStyle.ORNAMENTS
+            badge = "👑 PRO Luxury",
+            decorationStyle = CardDecorationStyle.ORNAMENTS,
+            isPro = true
         ),
         CardTemplate(
             id = "xm_card_09_royal_cozy",
@@ -115,8 +117,9 @@ object CardTemplatesRepository {
             primaryColorHex = 0xFF4A192C,
             secondaryColorHex = 0xFF732E48,
             accentColorHex = 0xFFF5B7B1,
-            badge = "Cozy Glow",
-            decorationStyle = CardDecorationStyle.ORNAMENTS
+            badge = "👑 PRO Foil",
+            decorationStyle = CardDecorationStyle.ORNAMENTS,
+            isPro = true
         ),
         CardTemplate(
             id = "xm_card_10_twilight_carol",
@@ -127,8 +130,9 @@ object CardTemplatesRepository {
             primaryColorHex = 0xFF0D2818,
             secondaryColorHex = 0xFF1E4D2B,
             accentColorHex = 0xFF80ED99,
-            badge = "Carols",
-            decorationStyle = CardDecorationStyle.STARS
+            badge = "👑 PRO Velvet",
+            decorationStyle = CardDecorationStyle.STARS,
+            isPro = true
         ),
 
         // =========================================================
@@ -155,8 +159,9 @@ object CardTemplatesRepository {
             primaryColorHex = 0xFF1A1A1D,
             secondaryColorHex = 0xFF4E4E50,
             accentColorHex = 0xFFF5B700,
-            badge = "Confetti",
-            decorationStyle = CardDecorationStyle.CONFETTI
+            badge = "👑 PRO Champagne",
+            decorationStyle = CardDecorationStyle.CONFETTI,
+            isPro = true
         ),
         CardTemplate(
             id = "ny_card_03_welcome_2027",
@@ -179,8 +184,9 @@ object CardTemplatesRepository {
             primaryColorHex = 0xFF350036,
             secondaryColorHex = 0xFF5D0060,
             accentColorHex = 0xFFFFD166,
-            badge = "Celebration",
-            decorationStyle = CardDecorationStyle.FIREWORKS
+            badge = "👑 PRO Gala",
+            decorationStyle = CardDecorationStyle.FIREWORKS,
+            isPro = true
         ),
         CardTemplate(
             id = "ny_card_05_starlight_dreams",
@@ -227,8 +233,9 @@ object CardTemplatesRepository {
             primaryColorHex = 0xFF1C1124,
             secondaryColorHex = 0xFF372549,
             accentColorHex = 0xFFF9C784,
-            badge = "Countdown",
-            decorationStyle = CardDecorationStyle.FIREWORKS
+            badge = "👑 PRO Crystal",
+            decorationStyle = CardDecorationStyle.FIREWORKS,
+            isPro = true
         ),
         CardTemplate(
             id = "ny_card_09_vibrant_carnival",
@@ -251,8 +258,9 @@ object CardTemplatesRepository {
             primaryColorHex = 0xFF1B263B,
             secondaryColorHex = 0xFF415A77,
             accentColorHex = 0xFFE0E1DD,
-            badge = "Serenity",
-            decorationStyle = CardDecorationStyle.STARS
+            badge = "👑 PRO Platinum",
+            decorationStyle = CardDecorationStyle.STARS,
+            isPro = true
         )
     )
 
@@ -261,6 +269,10 @@ object CardTemplatesRepository {
     fun getChristmasTemplates(): List<CardTemplate> = templates.filter { it.occasion == CardOccasion.CHRISTMAS }
 
     fun getNewYearTemplates(): List<CardTemplate> = templates.filter { it.occasion == CardOccasion.NEW_YEAR }
+
+    fun getProTemplates(): List<CardTemplate> = templates.filter { it.isPro }
+
+    fun getFreeTemplates(): List<CardTemplate> = templates.filter { !it.isPro }
 
     fun getTemplateById(id: String): CardTemplate? = templates.find { it.id == id }
 }

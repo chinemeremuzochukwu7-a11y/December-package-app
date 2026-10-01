@@ -1,11 +1,9 @@
 package com.example.ui.screens
 
 import android.content.Context
-import android.os.Build
 import android.widget.Toast
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -25,13 +23,19 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.WorkspacePremium
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -55,10 +59,17 @@ import com.example.data.repository.CardTemplatesRepository
 import com.example.model.CardOccasion
 import com.example.model.CardTemplate
 import com.example.ui.components.CardPreviewView
+import com.example.ui.components.ProUpgradeDialog
+import com.example.ui.components.RewardedAdDialog
 import com.example.ui.theme.HolidayCrimson
 import com.example.ui.theme.HolidayGold
+import com.example.ui.theme.HolidayPineGreen
 import com.example.ui.viewmodel.HolidayViewModel
 import com.example.utils.ShareHelper
+
+enum class CardFilterType {
+    ALL, PRO_ONLY, FREE_ONLY, CHRISTMAS, NEW_YEAR
+}
 
 @Composable
 fun CardsScreen(
@@ -69,13 +80,21 @@ fun CardsScreen(
 ) {
     val context = LocalContext.current
     val savedCards by viewModel.savedCards.collectAsStateWithLifecycle()
-    var selectedOccasion by remember { mutableStateOf<CardOccasion?>(CardOccasion.CHRISTMAS) }
+    val isProUser by viewModel.isProUser.collectAsStateWithLifecycle()
+    val isVipUser by viewModel.isVipUser.collectAsStateWithLifecycle()
+    val unlockedCardIds by viewModel.unlockedCardIds.collectAsStateWithLifecycle()
 
-    val filteredTemplates = when (selectedOccasion) {
-        CardOccasion.CHRISTMAS -> CardTemplatesRepository.getChristmasTemplates()
-        CardOccasion.NEW_YEAR -> CardTemplatesRepository.getNewYearTemplates()
-        null -> CardTemplatesRepository.getAllTemplates()
-        else -> CardTemplatesRepository.getAllTemplates()
+    var selectedFilter by remember { mutableStateOf(CardFilterType.ALL) }
+    var showProUpgradeDialog by remember { mutableStateOf(false) }
+    var proDialogTargetTemplate by remember { mutableStateOf<CardTemplate?>(null) }
+    var rewardedAdTemplate by remember { mutableStateOf<CardTemplate?>(null) }
+
+    val filteredTemplates = when (selectedFilter) {
+        CardFilterType.ALL -> CardTemplatesRepository.getAllTemplates()
+        CardFilterType.PRO_ONLY -> CardTemplatesRepository.getProTemplates()
+        CardFilterType.FREE_ONLY -> CardTemplatesRepository.getFreeTemplates()
+        CardFilterType.CHRISTMAS -> CardTemplatesRepository.getChristmasTemplates()
+        CardFilterType.NEW_YEAR -> CardTemplatesRepository.getNewYearTemplates()
     }
 
     Column(
@@ -83,11 +102,97 @@ fun CardsScreen(
             .fillMaxSize()
             .testTag("cards_screen")
     ) {
-        // Top Action Bar: Category Chips & "My Cards" shortcut button
+        // Pro Upgrade Banner (if not already Pro or VIP)
+        if (!isProUser && !isVipUser) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 6.dp)
+                    .clickable {
+                        proDialogTargetTemplate = null
+                        showProUpgradeDialog = true
+                    }
+                    .testTag("pro_upgrade_banner"),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = HolidayGold.copy(alpha = 0.15f)
+                ),
+                border = BorderStroke(1.5.dp, HolidayGold)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(text = "👑", fontSize = 22.sp)
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                text = "Holiday Wishes Pro & VIP Pass",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "Unlock 8+ luxury cards from $4.99 or with short videos",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 11.5.sp
+                            )
+                        }
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = HolidayCrimson
+                    ) {
+                        Text(
+                            text = "UNLOCK",
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color.White,
+                            fontSize = 11.sp,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                        )
+                    }
+                }
+            }
+        } else {
+            // Already Pro / VIP Badge
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                shape = RoundedCornerShape(12.dp),
+                color = HolidayGold.copy(alpha = 0.2f),
+                border = BorderStroke(1.dp, HolidayGold)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(text = if (isVipUser) "⭐" else "👑", fontSize = 16.sp)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = if (isVipUser) "Ultimate VIP Active — All Luxury Cards & Unlimited AI Unlocked" else "Holiday Wishes Pro Active — All Templates Unlocked",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+        }
+
+        // Action Bar: Category Filter Chips & "My Cards" shortcut
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .padding(horizontal = 16.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -98,22 +203,34 @@ fun CardsScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 CategoryPill(
-                    text = "Christmas (${CardTemplatesRepository.getChristmasTemplates().size})",
-                    isSelected = selectedOccasion == CardOccasion.CHRISTMAS,
-                    onClick = { selectedOccasion = CardOccasion.CHRISTMAS },
+                    text = "All (${CardTemplatesRepository.getAllTemplates().size})",
+                    isSelected = selectedFilter == CardFilterType.ALL,
+                    onClick = { selectedFilter = CardFilterType.ALL },
+                    modifier = Modifier.testTag("filter_all_cards")
+                )
+                CategoryPill(
+                    text = "👑 Pro (${CardTemplatesRepository.getProTemplates().size})",
+                    isSelected = selectedFilter == CardFilterType.PRO_ONLY,
+                    onClick = { selectedFilter = CardFilterType.PRO_ONLY },
+                    modifier = Modifier.testTag("filter_pro_cards")
+                )
+                CategoryPill(
+                    text = "✨ Free (${CardTemplatesRepository.getFreeTemplates().size})",
+                    isSelected = selectedFilter == CardFilterType.FREE_ONLY,
+                    onClick = { selectedFilter = CardFilterType.FREE_ONLY },
+                    modifier = Modifier.testTag("filter_free_cards")
+                )
+                CategoryPill(
+                    text = "🎄 Christmas (${CardTemplatesRepository.getChristmasTemplates().size})",
+                    isSelected = selectedFilter == CardFilterType.CHRISTMAS,
+                    onClick = { selectedFilter = CardFilterType.CHRISTMAS },
                     modifier = Modifier.testTag("filter_christmas_cards")
                 )
                 CategoryPill(
-                    text = "New Year (${CardTemplatesRepository.getNewYearTemplates().size})",
-                    isSelected = selectedOccasion == CardOccasion.NEW_YEAR,
-                    onClick = { selectedOccasion = CardOccasion.NEW_YEAR },
+                    text = "🎉 New Year (${CardTemplatesRepository.getNewYearTemplates().size})",
+                    isSelected = selectedFilter == CardFilterType.NEW_YEAR,
+                    onClick = { selectedFilter = CardFilterType.NEW_YEAR },
                     modifier = Modifier.testTag("filter_newyear_cards")
-                )
-                CategoryPill(
-                    text = "All Cards (${CardTemplatesRepository.getAllTemplates().size})",
-                    isSelected = selectedOccasion == null,
-                    onClick = { selectedOccasion = null },
-                    modifier = Modifier.testTag("filter_all_cards")
                 )
             }
 
@@ -139,7 +256,7 @@ fun CardsScreen(
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = "My Cards (${savedCards.size})",
+                        text = "My (${savedCards.size})",
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold,
                         color = HolidayGold
@@ -157,11 +274,18 @@ fun CardsScreen(
             verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
             items(filteredTemplates, key = { it.id }) { template ->
+                val isUnlocked = viewModel.isCardUnlocked(template)
                 GridCardTemplateItem(
                     template = template,
+                    isUnlocked = isUnlocked,
                     onCustomizeClick = {
-                        viewModel.prepareCardForCustomization(template)
-                        onNavigateToCustomize(template)
+                        if (isUnlocked) {
+                            viewModel.prepareCardForCustomization(template)
+                            onNavigateToCustomize(template)
+                        } else {
+                            proDialogTargetTemplate = template
+                            showProUpgradeDialog = true
+                        }
                     },
                     onQuickShareClick = {
                         ShareHelper.shareCard(
@@ -176,11 +300,57 @@ fun CardsScreen(
             }
         }
     }
+
+    // Pro Upgrade Dialog ($5 / $10 purchase or Watch Ad)
+    if (showProUpgradeDialog) {
+        ProUpgradeDialog(
+            targetTemplate = proDialogTargetTemplate,
+            onPurchaseTier = { tierId ->
+                viewModel.purchaseProTier(tierId)
+                Toast.makeText(context, "Welcome to Holiday Wishes Pro! Enjoy all luxury cards! 🎉", Toast.LENGTH_LONG).show()
+                showProUpgradeDialog = false
+            },
+            onWatchRewardedAd = {
+                rewardedAdTemplate = proDialogTargetTemplate
+                showProUpgradeDialog = false
+            },
+            onRestorePurchases = {
+                val restored = viewModel.restorePurchases()
+                Toast.makeText(
+                    context,
+                    if (restored) "Purchases successfully restored! Welcome back! 🎉" else "No existing Google Play purchases found.",
+                    Toast.LENGTH_SHORT
+                ).show()
+            },
+            onDismiss = {
+                showProUpgradeDialog = false
+                proDialogTargetTemplate = null
+            }
+        )
+    }
+
+    // Rewarded Ad Dialog (AdMob simulation with real unlock grant)
+    if (rewardedAdTemplate != null) {
+        RewardedAdDialog(
+            template = rewardedAdTemplate!!,
+            onRewardEarned = {
+                val unlocked = rewardedAdTemplate!!
+                viewModel.unlockCardViaRewardedAd(unlocked.id)
+                Toast.makeText(context, "🎉 ${unlocked.title} unlocked for free!", Toast.LENGTH_SHORT).show()
+                viewModel.prepareCardForCustomization(unlocked)
+                onNavigateToCustomize(unlocked)
+            },
+            onDismiss = {
+                rewardedAdTemplate = null
+            }
+        )
+    }
 }
 
 @Composable
 private fun GridCardTemplateItem(
     template: CardTemplate,
+    isUnlocked: Boolean,
     onCustomizeClick: () -> Unit,
     onQuickShareClick: () -> Unit
 ) {
@@ -190,15 +360,50 @@ private fun GridCardTemplateItem(
             .testTag("card_template_${template.id}"),
         shape = RoundedCornerShape(22.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)),
+        border = BorderStroke(
+            width = if (template.isPro) 1.5.dp else 1.dp,
+            color = if (template.isPro) HolidayGold else MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)
+        ),
         elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
-            // Card Preview inside grid
-            CardPreviewView(
-                template = template,
-                modifier = Modifier.height(260.dp)
-            )
+            // Card Preview inside grid with lock indicator if locked
+            Box(modifier = Modifier.fillMaxWidth()) {
+                CardPreviewView(
+                    template = template,
+                    modifier = Modifier.height(260.dp)
+                )
+
+                if (template.isPro) {
+                    Surface(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(8.dp),
+                        shape = RoundedCornerShape(8.dp),
+                        color = if (isUnlocked) HolidayPineGreen else Color.Black.copy(alpha = 0.75f),
+                        border = BorderStroke(1.dp, if (isUnlocked) Color.White else HolidayGold)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (isUnlocked) Icons.Default.LockOpen else Icons.Default.Lock,
+                                contentDescription = null,
+                                tint = if (isUnlocked) Color.White else HolidayGold,
+                                modifier = Modifier.size(13.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = if (isUnlocked) "PRO UNLOCKED" else "PRO EXCLUSIVE",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isUnlocked) Color.White else HolidayGold
+                            )
+                        }
+                    }
+                }
+            }
 
             Spacer(modifier = Modifier.height(12.dp))
 
@@ -209,21 +414,25 @@ private fun GridCardTemplateItem(
             ) {
                 Button(
                     onClick = onCustomizeClick,
-                    colors = ButtonDefaults.buttonColors(containerColor = HolidayCrimson),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (!isUnlocked) HolidayGold else HolidayCrimson
+                    ),
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier
                         .weight(1.3f)
                         .testTag("customize_button_${template.id}")
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Edit,
+                        imageVector = if (!isUnlocked) Icons.Default.Lock else Icons.Default.Edit,
                         contentDescription = null,
+                        tint = if (!isUnlocked) Color(0xFF332000) else Color.White,
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "Customize",
+                        text = if (!isUnlocked) "Unlock PRO" else "Customize",
                         fontWeight = FontWeight.Bold,
+                        color = if (!isUnlocked) Color(0xFF332000) else Color.White,
                         fontSize = 13.5.sp
                     )
                 }
@@ -262,22 +471,21 @@ private fun CategoryPill(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Surface(
+    FilterChip(
+        selected = isSelected,
         onClick = onClick,
-        shape = RoundedCornerShape(16.dp),
-        color = if (isSelected) HolidayCrimson else MaterialTheme.colorScheme.surfaceVariant,
-        border = BorderStroke(
-            1.dp,
-            if (isSelected) HolidayCrimson else MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
+        label = {
+            Text(
+                text = text,
+                fontSize = 12.5.sp,
+                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+            )
+        },
+        colors = FilterChipDefaults.filterChipColors(
+            selectedContainerColor = HolidayCrimson,
+            selectedLabelColor = Color.White,
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
         ),
         modifier = modifier
-    ) {
-        Text(
-            text = text,
-            color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
-            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-            fontSize = 13.sp,
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp)
-        )
-    }
+    )
 }
