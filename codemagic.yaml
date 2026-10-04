@@ -1,43 +1,32 @@
 workflows:
   android-release-bundle:
-    name: Holiday Wishes - Release AAB
+    name: December Package - Release AAB
     max_build_duration: 30
     instance_type: linux_x2
     environment:
       java: 21
       android_signing:
-        - holiday_wishes_signing
-      groups:
-        - google_play_credentials
-      vars:
-        STORE_PASSWORD: "HolidayWishes2026!"
-        KEY_PASSWORD: "HolidayWishes2026!"
+        - sonance
     scripts:
       - name: Set gradlew permissions
         script: |
           chmod +x gradlew
-      - name: Configure Keystore
-        script: |
-          # If keystore is uploaded in Codemagic UI, use Codemagic environment variables
-          if [ -n "$CM_KEYSTORE_PATH" ]; then
-            echo "Using Codemagic UI managed keystore: $CM_KEYSTORE_PATH"
-            export KEYSTORE_PATH="$CM_KEYSTORE_PATH"
-            export STORE_PASSWORD="$CM_KEYSTORE_PASSWORD"
-            export KEY_PASSWORD="$CM_KEY_PASSWORD"
-          elif [ -n "$KEYSTORE_BASE64" ]; then
-            echo "Decoding keystore from KEYSTORE_BASE64 variable"
-            echo "$KEYSTORE_BASE64" | base64 --decode > "$CM_BUILD_DIR/my-upload-key.jks"
-            export KEYSTORE_PATH="$CM_BUILD_DIR/my-upload-key.jks"
-          elif [ -f "$CM_BUILD_DIR/my-upload-key.jks" ]; then
-            echo "Using existing repository keystore: $CM_BUILD_DIR/my-upload-key.jks"
-            export KEYSTORE_PATH="$CM_BUILD_DIR/my-upload-key.jks"
-          fi
       - name: Build signed Release Android App Bundle (AAB)
         script: |
-          STORE_PASSWORD="${CM_KEYSTORE_PASSWORD:-$STORE_PASSWORD}" \
-          KEY_PASSWORD="${CM_KEY_PASSWORD:-$KEY_PASSWORD}" \
-          KEYSTORE_PATH="${CM_KEYSTORE_PATH:-$KEYSTORE_PATH}" \
-          ./gradlew :app:bundleRelease --no-daemon --stacktrace
+          KEYSTORE_PATH="${CM_KEYSTORE_PATH:-$KEYSTORE_PATH}"
+          STORE_PASSWORD="${CM_KEYSTORE_PASSWORD:-$STORE_PASSWORD}"
+          KEY_PASSWORD="${CM_KEY_PASSWORD:-$KEY_PASSWORD}"
+          KEY_ALIAS="${CM_KEY_ALIAS:-upload}"
+
+          echo "Using keystore: $KEYSTORE_PATH with alias: $KEY_ALIAS"
+
+          ./gradlew :app:bundleRelease \
+            -Pandroid.injected.signing.store.file="$KEYSTORE_PATH" \
+            -Pandroid.injected.signing.store.password="$STORE_PASSWORD" \
+            -Pandroid.injected.signing.key.alias="$KEY_ALIAS" \
+            -Pandroid.injected.signing.key.password="$KEY_PASSWORD" \
+            --no-daemon \
+            --stacktrace
     artifacts:
       - app/build/outputs/bundle/release/*.aab
       - app/build/outputs/mapping/release/mapping.txt
