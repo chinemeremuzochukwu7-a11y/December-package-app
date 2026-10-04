@@ -211,9 +211,9 @@ object SubscriptionManager : PurchasesUpdatedListener {
             .setProductList(productList)
             .build()
 
-        client.queryProductDetailsAsync(params) { billingResult, productDetailsList ->
+        client.queryProductDetailsAsync(params) { billingResult, queryProductDetailsResult ->
             if (billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
-                productDetailsList.forEach { details ->
+                queryProductDetailsResult.productDetailsList.forEach { details ->
                     productDetailsMap[details.productId] = details
                     Log.d(TAG, "Loaded product: ${details.productId}")
                 }
