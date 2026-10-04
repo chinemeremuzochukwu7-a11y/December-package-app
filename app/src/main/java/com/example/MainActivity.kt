@@ -89,6 +89,8 @@ fun HolidayWishesApp(
                      currentRoute == Screen.ProSubscription.route ||
                      currentRoute == Screen.CustomerCenter.route
 
+    val context = androidx.compose.ui.platform.LocalContext.current
+
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
@@ -96,12 +98,14 @@ fun HolidayWishesApp(
                 currentRoute = currentRoute,
                 onNavigateToRoute = { route ->
                     scope.launch { drawerState.close() }
-                    navController.navigate(route) {
-                        popUpTo(navController.graph.startDestinationId) {
-                            saveState = true
+                    com.example.ui.navigation.AdNavigationHelper.navigateWithSectionAdCheck(context, route) {
+                        navController.navigate(route) {
+                            popUpTo(navController.graph.startDestinationId) {
+                                saveState = true
+                            }
+                            launchSingleTop = true
+                            restoreState = true
                         }
-                        launchSingleTop = true
-                        restoreState = true
                     }
                 }
             )
@@ -128,12 +132,14 @@ fun HolidayWishesApp(
                 HolidayBottomBar(
                     currentRoute = currentRoute,
                     onNavigateToRoute = { route ->
-                        navController.navigate(route) {
-                            popUpTo(navController.graph.startDestinationId) {
-                                saveState = true
+                        com.example.ui.navigation.AdNavigationHelper.navigateWithSectionAdCheck(context, route) {
+                            navController.navigate(route) {
+                                popUpTo(navController.graph.startDestinationId) {
+                                    saveState = true
+                                }
+                                launchSingleTop = true
+                                restoreState = true
                             }
-                            launchSingleTop = true
-                            restoreState = true
                         }
                     }
                 )

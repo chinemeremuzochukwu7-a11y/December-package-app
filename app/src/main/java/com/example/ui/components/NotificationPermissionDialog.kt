@@ -67,20 +67,24 @@ fun NotificationPermissionPrompt(
     }
 
     LaunchedEffect(Unit) {
+        val prefs = context.getSharedPreferences("holiday_notif_prefs", Context.MODE_PRIVATE)
+        val alreadyPrompted = prefs.getBoolean("has_prompted", false)
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             val isGranted = ContextCompat.checkSelfPermission(
                 context,
                 Manifest.permission.POST_NOTIFICATIONS
             ) == PackageManager.PERMISSION_GRANTED
 
-            if (!isGranted) {
-                // Show prompt to allow user to turn on notifications
+            if (!isGranted && !alreadyPrompted) {
+                // Show prompt once politely
+                kotlinx.coroutines.delay(1200) // Allow main UI to render first
                 showPermissionDialog = true
-            } else {
+                prefs.edit().putBoolean("has_prompted", true).apply()
+            } else if (isGranted) {
                 onPermissionGranted()
             }
         } else {
-            // Below Android 13, notification permission is granted at install time
             onPermissionGranted()
         }
     }

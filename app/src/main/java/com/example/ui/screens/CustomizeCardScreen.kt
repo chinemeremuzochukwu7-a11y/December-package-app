@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import android.app.Activity
 import android.content.Context
 import android.os.Build
 import android.view.View
@@ -35,9 +36,13 @@ import androidx.compose.material.icons.filled.Flip
 import androidx.compose.material.icons.filled.FormatAlignCenter
 import androidx.compose.material.icons.filled.FormatAlignLeft
 import androidx.compose.material.icons.filled.FormatAlignRight
+import androidx.compose.material.icons.filled.MonetizationOn
+import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Stars
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -68,6 +73,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
+import com.example.data.ads.AdManager
+import com.example.data.subscription.SubscriptionManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -129,6 +136,113 @@ fun CustomizeCardScreen(
         }
     }
 
+    val credits by SubscriptionManager.credits.collectAsStateWithLifecycle()
+    val isPro by SubscriptionManager.isPro.collectAsStateWithLifecycle()
+    var showCreditDialog by remember { mutableStateOf(false) }
+    val activity = context as? Activity
+
+    val executeCardActionWithCredits = { onProceed: () -> Unit ->
+        if (isPro) {
+            onProceed()
+        } else {
+            if (credits < SubscriptionManager.CARD_CREATION_CREDIT_COST) {
+                showCreditDialog = true
+            } else {
+                // Free users must watch rewarded ad before starting creation
+                if (activity != null) {
+                    AdManager.showRewardedAd(
+                        activity = activity,
+                        onRewardEarned = { /* 1 credit added */ },
+                        onDismiss = {
+                            if (SubscriptionManager.useCredits(SubscriptionManager.CARD_CREATION_CREDIT_COST)) {
+                                onProceed()
+                            } else {
+                                showCreditDialog = true
+                            }
+                        }
+                    )
+                } else {
+                    if (SubscriptionManager.useCredits(SubscriptionManager.CARD_CREATION_CREDIT_COST)) {
+                        onProceed()
+                    }
+                }
+            }
+        }
+    }
+
+    val executeCardShare = {
+        if (isPro) {
+            shareCardAction(
+                context = context,
+                view = cardViewRef,
+                templateTitle = template.title,
+                recipient = recipientName,
+                message = customMessage,
+                sender = senderName
+            )
+        } else {
+            if (activity != null) {
+                AdManager.showRewardedAd(
+                    activity = activity,
+                    onRewardEarned = { /* 1 credit added */ },
+                    onDismiss = {
+                        shareCardAction(
+                            context = context,
+                            view = cardViewRef,
+                            templateTitle = template.title,
+                            recipient = recipientName,
+                            message = customMessage,
+                            sender = senderName
+                        )
+                    }
+                )
+            } else {
+                shareCardAction(
+                    context = context,
+                    view = cardViewRef,
+                    templateTitle = template.title,
+                    recipient = recipientName,
+                    message = customMessage,
+                    sender = senderName
+                )
+            }
+        }
+    }
+
+    if (showCreditDialog) {
+        AlertDialog(
+            onDismissRequest = { showCreditDialog = false },
+            title = {
+                Text("Need More Credits 🎨", fontWeight = FontWeight.Bold)
+            },
+            text = {
+                Text(
+                    "Creating a card costs 15 credits. You currently have $credits credits.\n\nWatch a rewarded ad to earn 1 credit each, or upgrade to Pro for unlimited card creation!"
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showCreditDialog = false
+                        if (activity != null) {
+                            AdManager.showRewardedAd(activity)
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = HolidayCrimson)
+                ) {
+                    Text("Watch Ad (+1 Credit)")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showCreditDialog = false }
+                ) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -176,6 +290,63 @@ fun CustomizeCardScreen(
                         fontSize = 11.sp,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                     )
+                }
+            }
+        }
+
+        // Credit status banner for card creation
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 6.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = if (isPro) HolidayGold.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant
+            ),
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = if (isPro) Icons.Default.Stars else Icons.Default.MonetizationOn,
+                        contentDescription = null,
+                        tint = if (isPro) HolidayGold else HolidayCrimson,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Column {
+                        Text(
+                            text = if (isPro) "PRO Unlimited Card Studio" else "Card Creation: 15 Credits",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp
+                        )
+                        if (!isPro) {
+                            Text(
+                                text = "Your Balance: $credits Credits • Watch ad to create",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+
+                if (!isPro) {
+                    TextButton(
+                        onClick = {
+                            if (activity != null) {
+                                AdManager.showRewardedAd(activity)
+                            }
+                        }
+                    ) {
+                        Icon(imageVector = Icons.Default.PlayCircle, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("+1 Credit", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
                 }
             }
         }
@@ -281,9 +452,11 @@ fun CustomizeCardScreen(
                     // Save Card Button (to My Cards / Room)
                     Button(
                         onClick = {
-                            viewModel.saveCurrentCard {
-                                Toast.makeText(context, "Card saved to My Cards! 🎄", Toast.LENGTH_SHORT).show()
-                                onNavigateToMyCards()
+                            executeCardActionWithCredits {
+                                viewModel.saveCurrentCard {
+                                    Toast.makeText(context, "Card saved to My Cards! 🎄", Toast.LENGTH_SHORT).show()
+                                    onNavigateToMyCards()
+                                }
                             }
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = HolidayCrimson),
@@ -305,10 +478,12 @@ fun CustomizeCardScreen(
                         // Save Image to Gallery Button
                         OutlinedButton(
                             onClick = {
-                                if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P) {
-                                    permissionLauncher.launch(android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
-                                } else {
-                                    saveCardImageToGallery(context, cardViewRef, template.title)
+                                executeCardActionWithCredits {
+                                    if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P) {
+                                        permissionLauncher.launch(android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                                    } else {
+                                        saveCardImageToGallery(context, cardViewRef, template.title)
+                                    }
                                 }
                             },
                             shape = RoundedCornerShape(12.dp),
@@ -336,14 +511,7 @@ fun CustomizeCardScreen(
                         // Share Card Button
                         Button(
                             onClick = {
-                                shareCardAction(
-                                    context = context,
-                                    view = cardViewRef,
-                                    templateTitle = template.title,
-                                    recipient = recipientName,
-                                    message = customMessage,
-                                    sender = senderName
-                                )
+                                executeCardShare()
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = HolidayGold),
                             shape = RoundedCornerShape(12.dp),

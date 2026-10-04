@@ -29,6 +29,8 @@ fun HolidayNavHost(
     viewModel: HolidayViewModel,
     modifier: Modifier = Modifier
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+
     NavHost(
         navController = navController,
         startDestination = Screen.Home.route,
@@ -38,13 +40,17 @@ fun HolidayNavHost(
             HomeScreen(
                 viewModel = viewModel,
                 onNavigateToCreateWish = {
-                    navController.navigate(Screen.AiWishGenerator.route) {
-                        launchSingleTop = true
+                    AdNavigationHelper.navigateWithSectionAdCheck(context, Screen.AiWishGenerator.route) {
+                        navController.navigate(Screen.AiWishGenerator.route) {
+                            launchSingleTop = true
+                        }
                     }
                 },
                 onNavigateToAiWishGenerator = {
-                    navController.navigate(Screen.AiWishGenerator.route) {
-                        launchSingleTop = true
+                    AdNavigationHelper.navigateWithSectionAdCheck(context, Screen.AiWishGenerator.route) {
+                        navController.navigate(Screen.AiWishGenerator.route) {
+                            launchSingleTop = true
+                        }
                     }
                 },
                 onNavigateToCards = {
@@ -54,8 +60,10 @@ fun HolidayNavHost(
                 },
                 onNavigateToCustomizeCard = { template ->
                     viewModel.prepareCardForCustomization(template)
-                    navController.navigate(Screen.CustomizeCard.route) {
-                        launchSingleTop = true
+                    AdNavigationHelper.navigateWithSectionAdCheck(context, Screen.CustomizeCard.route) {
+                        navController.navigate(Screen.CustomizeCard.route) {
+                            launchSingleTop = true
+                        }
                     }
                 },
                 onNavigateToWishesCategory = { category ->
@@ -70,23 +78,31 @@ fun HolidayNavHost(
                     }
                 },
                 onNavigateToBirthdays = {
-                    navController.navigate(Screen.BirthdayTracker.route) {
-                        launchSingleTop = true
+                    AdNavigationHelper.navigateWithSectionAdCheck(context, Screen.BirthdayTracker.route) {
+                        navController.navigate(Screen.BirthdayTracker.route) {
+                            launchSingleTop = true
+                        }
                     }
                 },
                 onNavigateToExpenses = {
-                    navController.navigate(Screen.ExpensesTracker.route) {
-                        launchSingleTop = true
+                    AdNavigationHelper.navigateWithSectionAdCheck(context, Screen.ExpensesTracker.route) {
+                        navController.navigate(Screen.ExpensesTracker.route) {
+                            launchSingleTop = true
+                        }
                     }
                 },
                 onNavigateToMeals = {
-                    navController.navigate(Screen.MealTracker.route) {
-                        launchSingleTop = true
+                    AdNavigationHelper.navigateWithSectionAdCheck(context, Screen.MealTracker.route) {
+                        navController.navigate(Screen.MealTracker.route) {
+                            launchSingleTop = true
+                        }
                     }
                 },
                 onNavigateToAlarms = {
-                    navController.navigate(Screen.AlarmReminder.route) {
-                        launchSingleTop = true
+                    AdNavigationHelper.navigateWithSectionAdCheck(context, Screen.AlarmReminder.route) {
+                        navController.navigate(Screen.AlarmReminder.route) {
+                            launchSingleTop = true
+                        }
                     }
                 }
             )
@@ -123,8 +139,10 @@ fun HolidayNavHost(
                 viewModel = viewModel,
                 onNavigateToCustomize = { template ->
                     viewModel.prepareCardForCustomization(template)
-                    navController.navigate(Screen.CustomizeCard.route) {
-                        launchSingleTop = true
+                    AdNavigationHelper.navigateWithSectionAdCheck(context, Screen.CustomizeCard.route) {
+                        navController.navigate(Screen.CustomizeCard.route) {
+                            launchSingleTop = true
+                        }
                     }
                 },
                 onNavigateToMyCards = {

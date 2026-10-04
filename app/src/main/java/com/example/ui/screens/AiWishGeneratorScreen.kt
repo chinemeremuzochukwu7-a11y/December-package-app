@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import android.app.Activity
 import android.text.format.DateUtils
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -39,8 +40,12 @@ import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.MonetizationOn
+import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Stars
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -79,7 +84,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.data.ads.AdManager
 import com.example.data.local.AiGeneratedWishEntity
+import com.example.data.subscription.SubscriptionManager
 import com.example.model.AiLanguage
 import com.example.model.AiOccasion
 import com.example.model.AiRecipient
@@ -108,8 +115,77 @@ fun AiWishGeneratorScreen(
     val generatedResult by viewModel.aiGeneratedResult.collectAsStateWithLifecycle()
     val errorMessage by viewModel.aiErrorMessage.collectAsStateWithLifecycle()
     val history by viewModel.aiWishHistory.collectAsStateWithLifecycle()
+    val credits by SubscriptionManager.credits.collectAsStateWithLifecycle()
+    val isPro by SubscriptionManager.isPro.collectAsStateWithLifecycle()
 
     var selectedTabIndex by remember { mutableIntStateOf(0) }
+    var showCreditDialog by remember { mutableStateOf(false) }
+
+    val context = LocalContext.current
+    val activity = context as? Activity
+
+    val onPerformGenerateWish = {
+        if (isPro) {
+            viewModel.generateAiWish()
+        } else {
+            if (credits < SubscriptionManager.WISH_CREATION_CREDIT_COST) {
+                showCreditDialog = true
+            } else {
+                // Free user before start creating must watch rewarded ads
+                if (activity != null) {
+                    AdManager.showRewardedAd(
+                        activity = activity,
+                        onRewardEarned = { /* +1 credit earned */ },
+                        onDismiss = {
+                            if (SubscriptionManager.useCredits(SubscriptionManager.WISH_CREATION_CREDIT_COST)) {
+                                viewModel.generateAiWish()
+                            } else {
+                                showCreditDialog = true
+                            }
+                        }
+                    )
+                } else {
+                    if (SubscriptionManager.useCredits(SubscriptionManager.WISH_CREATION_CREDIT_COST)) {
+                        viewModel.generateAiWish()
+                    }
+                }
+            }
+        }
+    }
+
+    if (showCreditDialog) {
+        AlertDialog(
+            onDismissRequest = { showCreditDialog = false },
+            title = {
+                Text("Need More Credits 🌟", fontWeight = FontWeight.Bold)
+            },
+            text = {
+                Text(
+                    "Creating a wish costs 10 credits. You currently have $credits credits.\n\nWatch a rewarded ad to earn 1 credit each, or upgrade to Pro for unlimited generation!"
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showCreditDialog = false
+                        if (activity != null) {
+                            AdManager.showRewardedAd(activity)
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = HolidayCrimson)
+                ) {
+                    Text("Watch Ad (+1 Credit)")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showCreditDialog = false }
+                ) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
 
     Column(
         modifier = modifier
@@ -151,6 +227,63 @@ fun AiWishGeneratorScreen(
             )
         }
 
+        // Credit status banner
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = if (isPro) HolidayGold.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant
+            ),
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = if (isPro) Icons.Default.Stars else Icons.Default.MonetizationOn,
+                        contentDescription = null,
+                        tint = if (isPro) HolidayGold else HolidayCrimson,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Column {
+                        Text(
+                            text = if (isPro) "PRO Active • Unlimited" else "10 Credits per Wish",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp
+                        )
+                        if (!isPro) {
+                            Text(
+                                text = "Your Balance: $credits Credits • Watch ad to create",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+
+                if (!isPro) {
+                    TextButton(
+                        onClick = {
+                            if (activity != null) {
+                                AdManager.showRewardedAd(activity)
+                            }
+                        }
+                    ) {
+                        Icon(imageVector = Icons.Default.PlayCircle, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("+1 Credit", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+
         if (selectedTabIndex == 0) {
             AiGeneratorContent(
                 occasion = occasion,
@@ -168,8 +301,8 @@ fun AiWishGeneratorScreen(
                 onToneChange = { viewModel.setAiTone(it) },
                 onLanguageChange = { viewModel.setAiLanguage(it) },
                 onPersonalDetailsChange = { viewModel.setAiPersonalDetails(it) },
-                onGenerateWish = { viewModel.generateAiWish() },
-                onGenerateAgain = { viewModel.generateAgainAiWish() },
+                onGenerateWish = onPerformGenerateWish,
+                onGenerateAgain = onPerformGenerateWish,
                 onSaveWish = { text, occ -> viewModel.saveAiWishToFavorites(text, occ) },
                 onCreateCard = { text, name ->
                     viewModel.prepareCardFromAiWish(text, name)
@@ -599,7 +732,25 @@ private fun GeneratedResultCard(
 
                     // Share button
                     OutlinedButton(
-                        onClick = { ShareHelper.shareWish(context, result.text, "AI Holiday Wish") },
+                        onClick = {
+                            val isPro = SubscriptionManager.isPro.value
+                            if (isPro) {
+                                ShareHelper.shareWish(context, result.text, "AI Holiday Wish")
+                            } else {
+                                val act = context as? Activity
+                                if (act != null) {
+                                    AdManager.showRewardedAd(
+                                        activity = act,
+                                        onRewardEarned = { /* 1 credit added */ },
+                                        onDismiss = {
+                                            ShareHelper.shareWish(context, result.text, "AI Holiday Wish")
+                                        }
+                                    )
+                                } else {
+                                    ShareHelper.shareWish(context, result.text, "AI Holiday Wish")
+                                }
+                            }
+                        },
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.weight(1f).testTag("ai_share_button"),
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp)

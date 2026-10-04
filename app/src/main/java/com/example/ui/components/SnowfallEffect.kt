@@ -56,6 +56,7 @@ fun SnowfallEffect(
             withFrameNanos { nanos ->
                 frameTime = (nanos / 1_000_000L).toFloat() / 1000f
             }
+            kotlinx.coroutines.delay(16)
         }
     }
 
