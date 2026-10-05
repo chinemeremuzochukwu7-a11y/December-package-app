@@ -294,58 +294,77 @@ fun CustomizeCardScreen(
             }
         }
 
-        // Credit status banner for card creation
-        Card(
+        // Credit status banner for card creation (compact, responsive, never overflows)
+        Surface(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 6.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = if (isPro) HolidayGold.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant
-            ),
-            shape = RoundedCornerShape(12.dp)
+            shape = RoundedCornerShape(12.dp),
+            color = if (isPro) HolidayGold.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+            border = BorderStroke(1.dp, if (isPro) HolidayGold.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = if (isPro) Icons.Default.Stars else Icons.Default.MonetizationOn,
-                        contentDescription = null,
-                        tint = if (isPro) HolidayGold else HolidayCrimson,
-                        modifier = Modifier.size(20.dp)
+                Icon(
+                    imageVector = if (isPro) Icons.Default.Stars else Icons.Default.MonetizationOn,
+                    contentDescription = null,
+                    tint = if (isPro) HolidayGold else HolidayCrimson,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = if (isPro) "👑 PRO Unlimited Card Studio" else "Card Creation: 15 Credits",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.5.sp,
+                        maxLines = 1,
+                        color = MaterialTheme.colorScheme.onSurface
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Column {
+                    if (!isPro) {
                         Text(
-                            text = if (isPro) "PRO Unlimited Card Studio" else "Card Creation: 15 Credits",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp
+                            text = "Balance: $credits Credits • Watch ad to create",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1
                         )
-                        if (!isPro) {
-                            Text(
-                                text = "Your Balance: $credits Credits • Watch ad to create",
-                                fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
                     }
                 }
 
                 if (!isPro) {
-                    TextButton(
-                        onClick = {
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Surface(
+                        color = HolidayCrimson.copy(alpha = 0.12f),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.clickable {
                             if (activity != null) {
                                 AdManager.showRewardedAd(activity)
                             }
                         }
                     ) {
-                        Icon(imageVector = Icons.Default.PlayCircle, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("+1 Credit", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.PlayCircle,
+                                contentDescription = null,
+                                tint = HolidayCrimson,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "+1 Credit",
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = HolidayCrimson,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                        }
                     }
                 }
             }

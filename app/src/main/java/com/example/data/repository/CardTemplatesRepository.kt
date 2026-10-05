@@ -262,7 +262,7 @@ object CardTemplatesRepository {
             decorationStyle = CardDecorationStyle.STARS,
             isPro = true
         )
-    )
+    ) + ProCardTemplatesData.proTemplates
 
     fun getAllTemplates(): List<CardTemplate> = templates
 

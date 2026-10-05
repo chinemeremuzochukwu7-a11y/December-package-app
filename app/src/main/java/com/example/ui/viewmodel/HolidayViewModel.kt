@@ -522,6 +522,16 @@ class HolidayViewModel(application: Application) : AndroidViewModel(application)
         _showSender.value = true
     }
 
+    val unlockedWishIds: StateFlow<Set<String>> = monetizationManager.unlockedWishIds
+
+    fun isWishUnlocked(wish: com.example.model.Wish): Boolean {
+        return monetizationManager.isWishUnlocked(wish.id, wish.isPro)
+    }
+
+    fun unlockWishViaRewardedAd(wishId: String) {
+        monetizationManager.unlockWishViaRewardedAd(wishId)
+    }
+
     fun isCardUnlocked(template: CardTemplate): Boolean {
         return monetizationManager.isCardUnlocked(template.id, template.isPro)
     }

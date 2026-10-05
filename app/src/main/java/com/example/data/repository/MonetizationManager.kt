@@ -66,13 +66,42 @@ class MonetizationManager(context: Context) {
     )
     val unlockedCardIds: StateFlow<Set<String>> = _unlockedCardIds.asStateFlow()
 
+    private val _unlockedWishIds = MutableStateFlow(
+        prefs.getStringSet(KEY_UNLOCKED_WISHES, emptySet())?.toSet() ?: emptySet()
+    )
+    val unlockedWishIds: StateFlow<Set<String>> = _unlockedWishIds.asStateFlow()
+
     private val _rewardedAdWatches = MutableStateFlow(prefs.getInt(KEY_REWARDED_WATCHES, 0))
     val rewardedAdWatches: StateFlow<Int> = _rewardedAdWatches.asStateFlow()
 
     fun isCardUnlocked(cardId: String, isTemplatePro: Boolean): Boolean {
         if (!isTemplatePro) return true
-        if (_isProUser.value || _isVipUser.value) return true
+        if (_isProUser.value || _isVipUser.value || com.example.data.subscription.SubscriptionManager.isPro.value) return true
         return _unlockedCardIds.value.contains(cardId)
+    }
+
+    fun isWishUnlocked(wishId: String, isProWish: Boolean): Boolean {
+        if (!isProWish) return true
+        if (_isProUser.value || _isVipUser.value || com.example.data.subscription.SubscriptionManager.isPro.value) return true
+        return _unlockedWishIds.value.contains(wishId)
+    }
+
+    /**
+     * Unlocks a single Pro wish after the user watches a rewarded ad or confirms unlock.
+     */
+    fun unlockWishViaRewardedAd(wishId: String) {
+        val currentSet = _unlockedWishIds.value.toMutableSet()
+        currentSet.add(wishId)
+        val newWatches = _rewardedAdWatches.value + 1
+
+        prefs.edit().apply {
+            putStringSet(KEY_UNLOCKED_WISHES, currentSet)
+            putInt(KEY_REWARDED_WATCHES, newWatches)
+            apply()
+        }
+
+        _unlockedWishIds.value = currentSet
+        _rewardedAdWatches.value = newWatches
     }
 
     /**
@@ -141,6 +170,7 @@ class MonetizationManager(context: Context) {
         private const val KEY_IS_PRO = "key_is_pro_user"
         private const val KEY_IS_VIP = "key_is_vip_user"
         private const val KEY_UNLOCKED_CARDS = "key_unlocked_cards"
+        private const val KEY_UNLOCKED_WISHES = "key_unlocked_wishes"
         private const val KEY_REWARDED_WATCHES = "key_rewarded_watches"
 
         @Volatile

@@ -319,12 +319,16 @@ private fun TierSelectionCard(
             .clickable(onClick = onClick)
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
+            // Header Row: Selection + Title + Badge + Prominent Price
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Surface(
                         shape = CircleShape,
                         color = if (isSelected) HolidayGold else Color.Transparent,
@@ -343,58 +347,38 @@ private fun TierSelectionCard(
                         }
                     }
 
-                    Spacer(modifier = Modifier.width(10.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
 
                     Text(
                         text = tierTitle,
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1
                     )
-                }
 
-                if (badge != null) {
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = badgeColor.copy(alpha = 0.2f),
-                        border = BorderStroke(1.dp, badgeColor.copy(alpha = 0.5f))
-                    ) {
-                        Text(
-                            text = badge,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = badgeColor,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Bottom
-            ) {
-                Column {
-                    features.take(2).forEach { feature ->
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(vertical = 1.5.dp)
+                    if (badge != null) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = badgeColor.copy(alpha = 0.2f),
+                            border = BorderStroke(1.dp, badgeColor.copy(alpha = 0.5f))
                         ) {
-                            Text(text = "✓", color = HolidayPineGreen, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = feature,
-                                style = MaterialTheme.typography.bodySmall,
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onSurface
+                                text = badge,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = badgeColor,
+                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
                             )
                         }
                     }
                 }
 
-                Column(horizontalAlignment = Alignment.End) {
+                // Price prominent on the right, guaranteed visible
+                Column(
+                    horizontalAlignment = Alignment.End,
+                    modifier = Modifier.padding(start = 8.dp)
+                ) {
                     Text(
                         text = price,
                         style = MaterialTheme.typography.titleLarge,
@@ -406,6 +390,28 @@ private fun TierSelectionCard(
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Features list below header (full width)
+            Column(modifier = Modifier.fillMaxWidth()) {
+                features.take(2).forEach { feature ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(vertical = 1.5.dp)
+                    ) {
+                        Text(text = "✓", color = HolidayPineGreen, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = feature,
+                            style = MaterialTheme.typography.bodySmall,
+                            fontSize = 11.5.sp,
+                            maxLines = 1,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
                 }
             }
         }

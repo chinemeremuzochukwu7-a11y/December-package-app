@@ -3,6 +3,7 @@ package com.example.ui.subscription
 import android.app.Activity
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -287,63 +288,87 @@ fun ProSubscriptionScreen(
                 }
             }
 
-            // Global 1-Year Plan Toggle with Bonus Badge
+            // Global Billing Period Segmented Selector (Monthly vs Yearly)
             item {
-                Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
-                    ),
+                Surface(
                     shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                            .padding(4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                        // Monthly Option
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (!globalAnnualBilling) MaterialTheme.colorScheme.surface else Color.Transparent,
+                            shadowElevation = if (!globalAnnualBilling) 2.dp else 0.dp,
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable {
+                                    globalAnnualBilling = false
+                                    SubscriptionManager.AVAILABLE_PLANS.forEach { plan ->
+                                        planYearlyState[plan.id] = false
+                                    }
+                                }
+                        ) {
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier.padding(vertical = 10.dp, horizontal = 4.dp)
+                            ) {
                                 Text(
-                                    text = "1-Year Plan (With Bonus)",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.Bold
+                                    text = "Monthly Plan",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = if (!globalAnnualBilling) FontWeight.Bold else FontWeight.Medium,
+                                    color = if (!globalAnnualBilling) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        // Yearly Option (with Save Badge)
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (globalAnnualBilling) MaterialTheme.colorScheme.primary else Color.Transparent,
+                            shadowElevation = if (globalAnnualBilling) 2.dp else 0.dp,
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable {
+                                    globalAnnualBilling = true
+                                    SubscriptionManager.AVAILABLE_PLANS.forEach { plan ->
+                                        planYearlyState[plan.id] = true
+                                    }
+                                }
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center,
+                                modifier = Modifier.padding(vertical = 10.dp, horizontal = 4.dp)
+                            ) {
+                                Text(
+                                    text = "1-Year Plan",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = if (globalAnnualBilling) FontWeight.Bold else FontWeight.Medium,
+                                    color = if (globalAnnualBilling) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Surface(
-                                    color = MaterialTheme.colorScheme.primary,
+                                    color = if (globalAnnualBilling) Color(0xFFFFD700) else MaterialTheme.colorScheme.primary,
                                     shape = RoundedCornerShape(6.dp)
                                 ) {
                                     Text(
-                                        text = "UP TO 25% OFF",
+                                        text = "SAVE 25%",
                                         style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onPrimary,
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = if (globalAnnualBilling) Color.Black else Color.White,
+                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
                                     )
                                 }
                             }
-                            Text(
-                                text = "Get massive bonus credits, discount, and exclusive card packs on all plans",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f)
-                            )
                         }
-
-                        Switch(
-                            checked = globalAnnualBilling,
-                            onCheckedChange = { checked ->
-                                globalAnnualBilling = checked
-                                SubscriptionManager.AVAILABLE_PLANS.forEach { plan ->
-                                    planYearlyState[plan.id] = checked
-                                }
-                            },
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = MaterialTheme.colorScheme.primary,
-                                checkedTrackColor = MaterialTheme.colorScheme.primaryContainer
-                            )
-                        )
                     }
                 }
             }

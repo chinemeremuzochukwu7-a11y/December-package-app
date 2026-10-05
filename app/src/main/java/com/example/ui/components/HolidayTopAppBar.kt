@@ -1,6 +1,7 @@
 package com.example.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AcUnit
 import androidx.compose.material.icons.filled.AutoAwesome
@@ -48,6 +50,7 @@ fun HolidayTopAppBar(
     modifier: Modifier = Modifier
 ) {
     val isPro by SubscriptionManager.isPro.collectAsState()
+    val credits by SubscriptionManager.credits.collectAsState()
 
     CenterAlignedTopAppBar(
         navigationIcon = {
@@ -70,41 +73,69 @@ fun HolidayTopAppBar(
                     imageVector = Icons.Default.AcUnit,
                     contentDescription = null,
                     tint = HolidayCrimson,
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(18.dp)
                 )
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(6.dp))
                 Text(
                     text = title,
-                    style = MaterialTheme.typography.titleLarge.copy(
+                    style = MaterialTheme.typography.titleMedium.copy(
                         fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.5.sp
+                        letterSpacing = 0.3.sp
                     ),
                     color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
                     modifier = Modifier.testTag("app_bar_title")
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Icon(
-                    imageVector = Icons.Default.Star,
-                    contentDescription = null,
-                    tint = HolidayGold,
-                    modifier = Modifier.size(18.dp)
                 )
             }
         },
         actions = {
-            IconButton(
-                onClick = onProClick,
-                modifier = Modifier.testTag("pro_badge_button")
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(end = 8.dp)
             ) {
+                // Credits Chip
                 Surface(
-                    shape = CircleShape,
-                    color = if (isPro) Color(0xFFFFD700) else HolidayCrimson.copy(alpha = 0.15f),
-                    modifier = Modifier.size(36.dp)
+                    shape = RoundedCornerShape(14.dp),
+                    color = HolidayGold.copy(alpha = 0.16f),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, HolidayGold.copy(alpha = 0.45f)),
+                    modifier = Modifier
+                        .clickable(onClick = onProClick)
+                        .testTag("app_bar_credits_chip")
                 ) {
-                    Box(contentAlignment = Alignment.Center) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.5.dp)
+                    ) {
+                        Text(text = "🪙", fontSize = 11.sp)
+                        Spacer(modifier = Modifier.width(2.5.dp))
                         Text(
-                            text = if (isPro) "👑" else "★",
-                            fontSize = if (isPro) 18.sp else 16.sp,
+                            text = "$credits",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = HolidayGold
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(5.dp))
+
+                // Pro Badge
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = if (isPro) Color(0xFFFFD700) else HolidayCrimson.copy(alpha = 0.15f),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, if (isPro) Color(0xFFFFD700) else HolidayCrimson.copy(alpha = 0.4f)),
+                    modifier = Modifier
+                        .clickable(onClick = onProClick)
+                        .testTag("pro_badge_button")
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.5.dp)
+                    ) {
+                        Text(
+                            text = if (isPro) "👑 PRO" else "★ PRO",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.ExtraBold,
                             color = if (isPro) Color.Black else HolidayCrimson
                         )
                     }

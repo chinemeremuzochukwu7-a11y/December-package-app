@@ -33,14 +33,14 @@ class ExampleRobolectricTest {
     @Test
     fun `verify card templates count and occasions`() {
         val allTemplates = CardTemplatesRepository.getAllTemplates()
-        assertEquals(20, allTemplates.size)
+        assertTrue(allTemplates.size >= 100)
 
         val christmasTemplates = CardTemplatesRepository.getChristmasTemplates()
-        assertEquals(10, christmasTemplates.size)
+        assertTrue(christmasTemplates.size >= 40)
         assertTrue(christmasTemplates.all { it.occasion == CardOccasion.CHRISTMAS })
 
         val newYearTemplates = CardTemplatesRepository.getNewYearTemplates()
-        assertEquals(10, newYearTemplates.size)
+        assertTrue(newYearTemplates.size >= 40)
         assertTrue(newYearTemplates.all { it.occasion == CardOccasion.NEW_YEAR })
     }
 

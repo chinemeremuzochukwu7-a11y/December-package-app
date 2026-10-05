@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -126,8 +127,9 @@ fun HolidayCountdownCard(
                 ) {
                     Row(
                         modifier = Modifier
-                            .background(Color.Black.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
-                            .padding(3.dp)
+                            .background(Color.Black.copy(alpha = 0.45f), RoundedCornerShape(12.dp))
+                            .padding(2.5.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Surface(
                             color = if (selectedTarget == 0) HolidayCrimson else Color.Transparent,
@@ -136,10 +138,12 @@ fun HolidayCountdownCard(
                         ) {
                             Text(
                                 text = "🎄 Christmas",
-                                color = if (selectedTarget == 0) Color.White else Color.White.copy(alpha = 0.6f),
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                                color = if (selectedTarget == 0) Color.White else Color.White.copy(alpha = 0.65f),
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                softWrap = false,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)
                             )
                         }
 
@@ -150,19 +154,22 @@ fun HolidayCountdownCard(
                         ) {
                             Text(
                                 text = "🎆 New Year",
-                                color = if (selectedTarget == 1) Color.Black else Color.White.copy(alpha = 0.6f),
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                                color = if (selectedTarget == 1) Color.Black else Color.White.copy(alpha = 0.65f),
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                softWrap = false,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)
                             )
                         }
                     }
 
-                    // Notification / Remind Me Chip
-                    Row(
+                    // Notification / Remind Me Chip (Guaranteed single line, never wraps vertically)
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = HolidayGold.copy(alpha = 0.16f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, HolidayGold.copy(alpha = 0.4f)),
                         modifier = Modifier
-                            .clip(RoundedCornerShape(20.dp))
-                            .background(HolidayGold.copy(alpha = 0.15f))
                             .clickable {
                                 Toast.makeText(
                                     context,
@@ -170,21 +177,27 @@ fun HolidayCountdownCard(
                                     Toast.LENGTH_LONG
                                 ).show()
                             }
-                            .padding(horizontal = 9.dp, vertical = 5.dp),
-                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.NotificationsActive,
-                            contentDescription = "Remind Me",
-                            tint = HolidayGold,
-                            modifier = Modifier.padding(end = 4.dp).height(14.dp)
-                        )
-                        Text(
-                            text = "Remind Me",
-                            color = HolidayGold,
-                            fontSize = 11.5.sp,
-                            fontWeight = FontWeight.Bold
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.NotificationsActive,
+                                contentDescription = "Remind Me",
+                                tint = HolidayGold,
+                                modifier = Modifier.size(13.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "Remind",
+                                color = HolidayGold,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                        }
                     }
                 }
 
@@ -201,15 +214,15 @@ fun HolidayCountdownCard(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // 4 Digit blocks (Days, Hours, Minutes, Seconds)
+                // 4 Digit blocks (Days, Hours, Minutes, Seconds) - Adaptive weight for all screen widths
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    CountdownUnitBlock(value = days.toString().padStart(2, '0'), unit = "DAYS")
-                    CountdownUnitBlock(value = hours.toString().padStart(2, '0'), unit = "HOURS")
-                    CountdownUnitBlock(value = minutes.toString().padStart(2, '0'), unit = "MINS")
-                    CountdownUnitBlock(value = seconds.toString().padStart(2, '0'), unit = "SECS", isAccent = true)
+                    CountdownUnitBlock(value = days.toString().padStart(2, '0'), unit = "DAYS", modifier = Modifier.weight(1f))
+                    CountdownUnitBlock(value = hours.toString().padStart(2, '0'), unit = "HOURS", modifier = Modifier.weight(1f))
+                    CountdownUnitBlock(value = minutes.toString().padStart(2, '0'), unit = "MINS", modifier = Modifier.weight(1f))
+                    CountdownUnitBlock(value = seconds.toString().padStart(2, '0'), unit = "SECS", isAccent = true, modifier = Modifier.weight(1f))
                 }
             }
         }
@@ -220,7 +233,8 @@ fun HolidayCountdownCard(
 private fun CountdownUnitBlock(
     value: String,
     unit: String,
-    isAccent: Boolean = false
+    isAccent: Boolean = false,
+    modifier: Modifier = Modifier
 ) {
     Surface(
         color = if (isAccent) HolidayGold.copy(alpha = 0.18f) else Color.White.copy(alpha = 0.08f),
@@ -229,7 +243,7 @@ private fun CountdownUnitBlock(
             0.5.dp,
             if (isAccent) HolidayGold.copy(alpha = 0.6f) else Color.White.copy(alpha = 0.15f)
         ),
-        modifier = Modifier.width(68.dp)
+        modifier = modifier
     ) {
         Column(
             modifier = Modifier.padding(vertical = 8.dp),
@@ -237,15 +251,15 @@ private fun CountdownUnitBlock(
         ) {
             Text(
                 text = value,
-                fontSize = 21.sp,
+                fontSize = 20.sp,
                 fontWeight = FontWeight.ExtraBold,
                 color = if (isAccent) HolidayGold else Color.White
             )
             Text(
                 text = unit,
-                fontSize = 9.5.sp,
+                fontSize = 9.sp,
                 fontWeight = FontWeight.Bold,
-                letterSpacing = 1.sp,
+                letterSpacing = 0.5.sp,
                 color = Color.White.copy(alpha = 0.65f)
             )
         }

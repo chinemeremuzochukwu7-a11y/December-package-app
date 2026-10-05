@@ -1172,21 +1172,23 @@ object WishesRepository {
             occasion = "Celebration",
             isPopular = false
         )
-    )
+    ) + ProWishesData.proWishes
 
     fun getAllWishes(): List<Wish> = wishesList
 
     fun getWishesByCategory(category: WishCategory): List<Wish> {
-        return if (category == WishCategory.ALL) {
-            wishesList
-        } else {
-            wishesList.filter { it.category == category }
+        return when (category) {
+            WishCategory.ALL -> wishesList
+            WishCategory.PRO -> wishesList.filter { it.isPro }
+            else -> wishesList.filter { it.category == category }
         }
     }
 
     fun getChristmasWishes(): List<Wish> = wishesList.filter { it.category == WishCategory.CHRISTMAS }
 
     fun getNewYearWishes(): List<Wish> = wishesList.filter { it.category == WishCategory.NEW_YEAR }
+
+    fun getProWishes(): List<Wish> = wishesList.filter { it.isPro }
 
     fun getPopularWishes(): List<Wish> = wishesList.filter { it.isPopular }
 }

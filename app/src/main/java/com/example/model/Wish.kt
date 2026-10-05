@@ -2,6 +2,7 @@ package com.example.model
 
 enum class WishCategory(val displayName: String) {
     ALL("All"),
+    PRO("👑 Pro VIP"),
     CHRISTMAS("Christmas"),
     NEW_YEAR("New Year"),
     FAMILY("Family"),
@@ -20,5 +21,6 @@ data class Wish(
     val category: WishCategory,
     val occasion: String = "Holiday",
     val isFavorite: Boolean = false,
-    val isPopular: Boolean = false
+    val isPopular: Boolean = false,
+    val isPro: Boolean = false
 )

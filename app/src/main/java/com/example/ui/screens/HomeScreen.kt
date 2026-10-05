@@ -92,6 +92,7 @@ fun HomeScreen(
     modifier: Modifier = Modifier
 ) {
     val isPro by SubscriptionManager.isPro.collectAsState()
+    val credits by SubscriptionManager.credits.collectAsState()
     val favoriteIds by viewModel.favoriteIds.collectAsStateWithLifecycle()
     val snowEffectsEnabled by viewModel.snowEffectsEnabled.collectAsStateWithLifecycle()
     val featuredCardTemplates = CardTemplatesRepository.getAllTemplates().take(4)
@@ -106,6 +107,59 @@ fun HomeScreen(
                 .testTag("home_screen"),
             contentPadding = PaddingValues(bottom = 96.dp)
         ) {
+            // Pro Badge & Credit Balance Landing Header
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(20.dp),
+                        color = if (isPro) Color(0xFFFFD700).copy(alpha = 0.18f) else HolidayCrimson.copy(alpha = 0.12f),
+                        border = BorderStroke(1.dp, if (isPro) Color(0xFFFFD700) else HolidayCrimson.copy(alpha = 0.35f)),
+                        modifier = Modifier.clickable { onNavigateToPro() }
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                        ) {
+                            Text(text = if (isPro) "👑" else "★", fontSize = 13.sp)
+                            Spacer(modifier = Modifier.width(5.dp))
+                            Text(
+                                text = if (isPro) "PRO ACTIVE" else "Get Pro Access",
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isPro) HolidayGold else HolidayCrimson
+                            )
+                        }
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(20.dp),
+                        color = HolidayGold.copy(alpha = 0.16f),
+                        border = BorderStroke(1.dp, HolidayGold.copy(alpha = 0.4f)),
+                        modifier = Modifier.clickable { onNavigateToPro() }
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                        ) {
+                            Text(text = "🪙", fontSize = 13.sp)
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "$credits Credits",
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = HolidayGold
+                            )
+                        }
+                    }
+                }
+            }
+
             // Hero Section
             item {
                 HeroHeaderSection(
