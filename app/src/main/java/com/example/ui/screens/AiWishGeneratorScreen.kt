@@ -13,6 +13,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -192,6 +193,69 @@ fun AiWishGeneratorScreen(
             .fillMaxSize()
             .testTag("ai_wish_generator_screen")
     ) {
+        // Very top slim credit status chip (never blocks the screen)
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 6.dp),
+            shape = RoundedCornerShape(10.dp),
+            color = if (isPro) HolidayGold.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+            border = BorderStroke(1.dp, if (isPro) HolidayGold.copy(alpha = 0.35f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = if (isPro) Icons.Default.Stars else Icons.Default.MonetizationOn,
+                    contentDescription = null,
+                    tint = if (isPro) HolidayGold else HolidayCrimson,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = if (isPro) "PRO Unlimited AI Wishes" else "10 Credits/Wish • Balance: $credits",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1
+                )
+                if (!isPro) {
+                    Surface(
+                        color = HolidayCrimson.copy(alpha = 0.12f),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.clickable {
+                            if (activity != null) {
+                                AdManager.showRewardedAd(activity)
+                            }
+                        }
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.PlayCircle,
+                                contentDescription = null,
+                                tint = HolidayCrimson,
+                                modifier = Modifier.size(12.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "+1 Credit",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = HolidayCrimson
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
         // Tab row: Generator & History
         TabRow(
             selectedTabIndex = selectedTabIndex,
@@ -225,63 +289,6 @@ fun AiWishGeneratorScreen(
                 },
                 modifier = Modifier.testTag("tab_ai_history")
             )
-        }
-
-        // Credit status banner
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = if (isPro) HolidayGold.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant
-            ),
-            shape = RoundedCornerShape(12.dp)
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = if (isPro) Icons.Default.Stars else Icons.Default.MonetizationOn,
-                        contentDescription = null,
-                        tint = if (isPro) HolidayGold else HolidayCrimson,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Column {
-                        Text(
-                            text = if (isPro) "PRO Active • Unlimited" else "10 Credits per Wish",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp
-                        )
-                        if (!isPro) {
-                            Text(
-                                text = "Your Balance: $credits Credits • Watch ad to create",
-                                fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                }
-
-                if (!isPro) {
-                    TextButton(
-                        onClick = {
-                            if (activity != null) {
-                                AdManager.showRewardedAd(activity)
-                            }
-                        }
-                    ) {
-                        Icon(imageVector = Icons.Default.PlayCircle, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("+1 Credit", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
         }
 
         if (selectedTabIndex == 0) {

@@ -77,8 +77,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.ads.AdManager
 import com.example.data.ads.AdMobBanner
+import com.example.data.repository.PricingTiers
 import com.example.data.subscription.BillingPlan
 import com.example.data.subscription.SubscriptionManager
+import com.example.ui.theme.HolidayCrimson
+import com.example.ui.theme.HolidayGold
+import com.example.ui.theme.HolidayGoldDark
+import com.example.ui.theme.HolidayPineGreen
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -97,6 +102,9 @@ fun ProSubscriptionScreen(
     val activeTier by SubscriptionManager.activeTier.collectAsState()
     val isLoading by SubscriptionManager.isLoading.collectAsState()
     val errorMessage by SubscriptionManager.error.collectAsState()
+
+    // Selected Pro Tier matching reference dialog
+    var selectedReferenceTierId by remember { mutableStateOf(PricingTiers.ULTIMATE_VIP.id) }
 
     // Global toggle for billing period (Monthly vs 1-Year with bonus)
     var globalAnnualBilling by remember { mutableStateOf(true) }
@@ -288,121 +296,197 @@ fun ProSubscriptionScreen(
                 }
             }
 
-            // Global Billing Period Segmented Selector (Monthly vs Yearly)
+            // Exact Price & Tier Section matching reference
             item {
-                Surface(
-                    shape = RoundedCornerShape(16.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
-                    modifier = Modifier.fillMaxWidth()
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Row(
+                    Text(
+                        text = "Choose Your Pro Plan",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "Unlock all features, exclusive luxury cards & unlimited AI wishes",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
+                    )
+
+                    // Tier 1: $4.99 (Holiday Wishes Pro)
+                    val proTier = PricingTiers.PRO_LIFETIME
+                    ReferenceTierCard(
+                        tierTitle = proTier.title,
+                        price = proTier.priceDisplay,
+                        period = "One-time Lifetime",
+                        badge = proTier.badge,
+                        badgeColor = HolidayPineGreen,
+                        isSelected = selectedReferenceTierId == proTier.id,
+                        onClick = { selectedReferenceTierId = proTier.id },
+                        features = listOf(
+                            "Unlock all 10+ Pro Christmas & New Year cards",
+                            "100% Ad-Free experience across the app",
+                            "High-resolution card export for print & stories",
+                            "Lifetime access with zero recurring subscriptions"
+                        ),
+                        modifier = Modifier.testTag("tier_pro_5")
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Tier 2: $9.99 (Ultimate VIP Pass)
+                    val vipTier = PricingTiers.ULTIMATE_VIP
+                    ReferenceTierCard(
+                        tierTitle = vipTier.title,
+                        price = vipTier.priceDisplay,
+                        period = "One-time Lifetime",
+                        badge = "BEST VALUE",
+                        badgeColor = HolidayGold,
+                        isSelected = selectedReferenceTierId == vipTier.id,
+                        onClick = { selectedReferenceTierId = vipTier.id },
+                        features = listOf(
+                            "Everything in Holiday Wishes Pro ($5 tier)",
+                            "Unlimited AI Holiday Wish Generations",
+                            "Exclusive VIP Gold Foil stamps & stickers",
+                            "VIP Crown badge on customized cards",
+                            "Priority support & all future holiday updates"
+                        ),
+                        modifier = Modifier.testTag("tier_vip_10")
+                    )
+
+                    Spacer(modifier = Modifier.height(18.dp))
+
+                    // Primary Purchase Button
+                    Button(
+                        onClick = {
+                            if (activity != null) {
+                                val targetPlan = if (selectedReferenceTierId == vipTier.id) {
+                                    SubscriptionManager.AVAILABLE_PLANS.getOrNull(1) ?: SubscriptionManager.AVAILABLE_PLANS[0]
+                                } else {
+                                    SubscriptionManager.AVAILABLE_PLANS[0]
+                                }
+                                SubscriptionManager.purchase(
+                                    activity = activity,
+                                    plan = targetPlan,
+                                    isYearly = false,
+                                    onSuccess = {
+                                        scope.launch {
+                                            snackbarHostState.showSnackbar("🎉 Welcome to ${if (selectedReferenceTierId == vipTier.id) vipTier.title else proTier.title}! Activated.")
+                                        }
+                                    },
+                                    onError = { err ->
+                                        scope.launch {
+                                            snackbarHostState.showSnackbar(err)
+                                        }
+                                    }
+                                )
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (selectedReferenceTierId == vipTier.id) HolidayGold else HolidayCrimson
+                        ),
+                        shape = RoundedCornerShape(14.dp),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            .height(52.dp)
+                            .testTag("purchase_pro_tier_button")
                     ) {
-                        // Monthly Option
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = if (!globalAnnualBilling) MaterialTheme.colorScheme.surface else Color.Transparent,
-                            shadowElevation = if (!globalAnnualBilling) 2.dp else 0.dp,
-                            modifier = Modifier
-                                .weight(1f)
-                                .clickable {
-                                    globalAnnualBilling = false
-                                    SubscriptionManager.AVAILABLE_PLANS.forEach { plan ->
-                                        planYearlyState[plan.id] = false
-                                    }
-                                }
-                        ) {
-                            Box(
-                                contentAlignment = Alignment.Center,
-                                modifier = Modifier.padding(vertical = 10.dp, horizontal = 4.dp)
-                            ) {
-                                Text(
-                                    text = "Monthly Plan",
-                                    style = MaterialTheme.typography.labelLarge,
-                                    fontWeight = if (!globalAnnualBilling) FontWeight.Bold else FontWeight.Medium,
-                                    color = if (!globalAnnualBilling) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-
-                        // Yearly Option (with Save Badge)
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = if (globalAnnualBilling) MaterialTheme.colorScheme.primary else Color.Transparent,
-                            shadowElevation = if (globalAnnualBilling) 2.dp else 0.dp,
-                            modifier = Modifier
-                                .weight(1f)
-                                .clickable {
-                                    globalAnnualBilling = true
-                                    SubscriptionManager.AVAILABLE_PLANS.forEach { plan ->
-                                        planYearlyState[plan.id] = true
-                                    }
-                                }
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.Center,
-                                modifier = Modifier.padding(vertical = 10.dp, horizontal = 4.dp)
-                            ) {
-                                Text(
-                                    text = "1-Year Plan",
-                                    style = MaterialTheme.typography.labelLarge,
-                                    fontWeight = if (globalAnnualBilling) FontWeight.Bold else FontWeight.Medium,
-                                    color = if (globalAnnualBilling) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Surface(
-                                    color = if (globalAnnualBilling) Color(0xFFFFD700) else MaterialTheme.colorScheme.primary,
-                                    shape = RoundedCornerShape(6.dp)
-                                ) {
-                                    Text(
-                                        text = "SAVE 25%",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = FontWeight.ExtraBold,
-                                        color = if (globalAnnualBilling) Color.Black else Color.White,
-                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
-                                    )
-                                }
-                            }
-                        }
+                        Icon(
+                            imageVector = Icons.Default.AutoAwesome,
+                            contentDescription = null,
+                            tint = if (selectedReferenceTierId == vipTier.id) Color(0xFF332000) else Color.White
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = if (selectedReferenceTierId == vipTier.id)
+                                "Unlock Ultimate VIP Pass (${vipTier.priceDisplay})"
+                            else
+                                "Get Holiday Wishes Pro (${proTier.priceDisplay})",
+                            fontWeight = FontWeight.Bold,
+                            color = if (selectedReferenceTierId == vipTier.id) Color(0xFF332000) else Color.White,
+                            fontSize = 15.sp
+                        )
                     }
-                }
-            }
 
-            // The 3 Payment Tier Cards ($5, $15, $45)
-            items(SubscriptionManager.AVAILABLE_PLANS) { plan ->
-                val isPlanYearly = planYearlyState[plan.id] ?: globalAnnualBilling
+                    Spacer(modifier = Modifier.height(10.dp))
 
-                PlanCard(
-                    plan = plan,
-                    isYearly = isPlanYearly,
-                    onToggleYearly = { checked ->
-                        planYearlyState[plan.id] = checked
-                    },
-                    onSelect = {
-                        if (activity != null) {
-                            SubscriptionManager.purchase(
-                                activity = activity,
-                                plan = plan,
-                                isYearly = isPlanYearly,
-                                onSuccess = {
+                    // Option to watch rewarded video ad
+                    OutlinedButton(
+                        onClick = {
+                            if (activity != null) {
+                                AdManager.showRewardedAd(
+                                    activity = activity,
+                                    onRewardEarned = { amount ->
+                                        SubscriptionManager.addCredits(amount)
+                                        scope.launch {
+                                            snackbarHostState.showSnackbar("🎉 You earned +$amount Credits from rewarded video!")
+                                        }
+                                    },
+                                    onDismiss = {}
+                                )
+                            }
+                        },
+                        shape = RoundedCornerShape(14.dp),
+                        border = BorderStroke(1.dp, HolidayPineGreen),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
+                            .testTag("watch_video_reward_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PlayCircle,
+                            contentDescription = null,
+                            tint = HolidayPineGreen
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Watch Short Video to Unlock Free Card",
+                            color = HolidayPineGreen,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 13.sp
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Restore Purchases & Info
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        TextButton(
+                            onClick = {
+                                SubscriptionManager.restorePurchases { active ->
                                     scope.launch {
-                                        snackbarHostState.showSnackbar("🎉 Welcome to ${plan.title}! Your credits are activated.")
-                                    }
-                                },
-                                onError = { error ->
-                                    scope.launch {
-                                        snackbarHostState.showSnackbar(error)
+                                        snackbarHostState.showSnackbar(
+                                            if (active) "Purchases restored! Active Pro access confirmed."
+                                            else "No existing purchases found."
+                                        )
                                     }
                                 }
+                            },
+                            modifier = Modifier.testTag("restore_purchases_button")
+                        ) {
+                            Text(
+                                text = "Restore Purchases",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
+
+                        Text(
+                            text = "Secure Google Play Billing",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                        )
                     }
-                )
+                }
             }
 
             // Google Play Secure Payment Footer
@@ -510,42 +594,71 @@ private fun PlanCard(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // Pricing
+            // Pricing - Ultra visible with high-contrast badge & explicit period
             Row(
-                verticalAlignment = Alignment.Bottom
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = if (isYearly) plan.yearlyPrice else plan.monthlyPrice,
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
+                Column {
+                    Text(
+                        text = if (isYearly) plan.yearlyPrice else plan.monthlyPrice,
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Black,
+                        color = HolidayCrimson
+                    )
+                    Text(
+                        text = if (isYearly) "Billed annually • Save 20-25%" else "Billed monthly • Cancel anytime",
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
 
             // Per-Plan 1-Year Plan Toggle with Bonus
             Spacer(modifier = Modifier.height(12.dp))
             Surface(
-                shape = RoundedCornerShape(10.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                shape = RoundedCornerShape(12.dp),
+                color = if (isYearly) HolidayGold.copy(alpha = 0.18f) else MaterialTheme.colorScheme.surfaceVariant,
+                border = BorderStroke(1.5.dp, if (isYearly) HolidayGold else MaterialTheme.colorScheme.outlineVariant),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = if (isYearly) "1-Year Plan Active" else "Switch to 1-Year Plan",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = if (isYearly) HolidayGoldDark else MaterialTheme.colorScheme.onSurface
+                            )
+                            if (isYearly) {
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Surface(
+                                    color = HolidayGold,
+                                    shape = RoundedCornerShape(4.dp)
+                                ) {
+                                    Text(
+                                        text = "BEST VALUE",
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Black,
+                                        color = Color.Black,
+                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
+                        }
                         Text(
-                            text = if (isYearly) "1-Year Plan Selected (Bonus Active)" else "Switch to 1-Year Plan",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = if (isYearly) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            text = if (isYearly) "${plan.yearlyCredits} Credits total" else "${plan.monthlyCredits} Credits / month",
+                            text = if (isYearly) "🎉 ${plan.yearlyCredits} Credits total + Bonus Gift" else "⚡ ${plan.monthlyCredits} Credits / month",
                             style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -553,6 +666,12 @@ private fun PlanCard(
                     Switch(
                         checked = isYearly,
                         onCheckedChange = onToggleYearly,
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = HolidayPineGreen,
+                            uncheckedThumbColor = MaterialTheme.colorScheme.outline,
+                            uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant
+                        ),
                         modifier = Modifier.testTag("toggle_yearly_${plan.id}")
                     )
                 }
@@ -628,6 +747,128 @@ private fun PlanCard(
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReferenceTierCard(
+    tierTitle: String,
+    price: String,
+    period: String,
+    badge: String?,
+    badgeColor: Color,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    features: List<String>,
+    modifier: Modifier = Modifier
+) {
+    val borderColor = if (isSelected) HolidayGold else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+    val bgColor = if (isSelected) HolidayGold.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = bgColor),
+        border = BorderStroke(if (isSelected) 2.dp else 1.dp, borderColor),
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            // Header Row: Selection Circle + Title + Badge + Prominent Price
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = if (isSelected) HolidayGold else Color.Transparent,
+                        border = BorderStroke(1.5.dp, if (isSelected) HolidayGold else MaterialTheme.colorScheme.outline),
+                        modifier = Modifier.size(20.dp)
+                    ) {
+                        if (isSelected) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = null,
+                                    tint = Color(0xFF332000),
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    Text(
+                        text = tierTitle,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1
+                    )
+
+                    if (badge != null) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = badgeColor.copy(alpha = 0.2f),
+                            border = BorderStroke(1.dp, badgeColor.copy(alpha = 0.5f))
+                        ) {
+                            Text(
+                                text = badge,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = badgeColor,
+                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+                }
+
+                // Price display
+                Column(
+                    horizontalAlignment = Alignment.End,
+                    modifier = Modifier.padding(start = 8.dp)
+                ) {
+                    Text(
+                        text = price,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = if (isSelected) HolidayCrimson else MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = period,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Features list below header
+            Column(modifier = Modifier.fillMaxWidth()) {
+                features.forEach { feature ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(vertical = 2.dp)
+                    ) {
+                        Text(text = "✓", color = HolidayPineGreen, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = feature,
+                            style = MaterialTheme.typography.bodySmall,
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
             }
         }
     }
