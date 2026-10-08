@@ -8,10 +8,21 @@ import com.example.data.subscription.SubscriptionManager
 
 object ShareHelper {
     fun shareWish(context: Context, wishText: String, subject: String = "Holiday Wish") {
+        val isPro = SubscriptionManager.isPro.value
+        val finalWishText = if (isPro) {
+            wishText
+        } else {
+            if (wishText.contains("Holiday Wishes")) {
+                wishText
+            } else {
+                "$wishText\n\n✨ Made with Holiday Wishes 🎄"
+            }
+        }
+
         val doShare = {
             val sendIntent = Intent().apply {
                 action = Intent.ACTION_SEND
-                putExtra(Intent.EXTRA_TEXT, wishText)
+                putExtra(Intent.EXTRA_TEXT, finalWishText)
                 putExtra(Intent.EXTRA_SUBJECT, subject)
                 type = "text/plain"
             }
@@ -19,7 +30,7 @@ object ShareHelper {
             context.startActivity(shareIntent)
         }
 
-        if (SubscriptionManager.isPro.value) {
+        if (isPro) {
             doShare()
         } else {
             val activity = context as? Activity
@@ -43,13 +54,16 @@ object ShareHelper {
         message: String,
         sender: String
     ) {
+        val isPro = SubscriptionManager.isPro.value
         val fullCardText = buildString {
             append("✨ $title ✨\n\n")
             if (recipient.isNotBlank()) append("To: $recipient\n\n")
             append("$message\n\n")
             if (sender.isNotBlank()) append("From: $sender\n\n")
-            append("— Shared via Holiday Wishes 🎄")
-        }
+            if (!isPro) {
+                append("✨ Made with Holiday Wishes 🎄")
+            }
+        }.trimEnd()
         shareWish(context, fullCardText, subject = title)
     }
 }

@@ -20,6 +20,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.data.subscription.SubscriptionManager
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -54,8 +57,12 @@ fun CardPreviewView(
     aspectRatio: String = "Standard",
     stickers: List<String> = emptyList(),
     photoUri: String? = null,
+    showWatermark: Boolean? = null,
     modifier: Modifier = Modifier
 ) {
+    val isPro by SubscriptionManager.isPro.collectAsStateWithLifecycle()
+    val shouldDisplayWatermark = showWatermark ?: (!isPro)
+
     val primaryColor = Color(template.primaryColorHex)
     val secondaryColor = Color(template.secondaryColorHex)
     val accentColor = Color(template.accentColorHex)
@@ -294,6 +301,33 @@ fun CardPreviewView(
                             fontSize = 12.sp,
                             color = accentColor.copy(alpha = 0.7f)
                         )
+                    }
+
+                    // Watermark for free users (removed automatically when upgraded to Pro)
+                    if (shouldDisplayWatermark) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Surface(
+                            shape = RoundedCornerShape(20.dp),
+                            color = Color.Black.copy(alpha = 0.45f),
+                            border = androidx.compose.foundation.BorderStroke(
+                                0.8.dp,
+                                accentColor.copy(alpha = 0.4f)
+                            ),
+                            modifier = Modifier.align(Alignment.CenterHorizontally)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                            ) {
+                                Text(
+                                    text = "✨ Made with Holiday Wishes 🎄",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = Color.White.copy(alpha = 0.9f),
+                                    letterSpacing = 0.4.sp
+                                )
+                            }
+                        }
                     }
                 }
             }

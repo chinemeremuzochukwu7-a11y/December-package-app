@@ -219,6 +219,7 @@ fun MyCardsScreen(
                     SavedCardItem(
                         card = cardEntity,
                         onShareClick = {
+                            val isPro = com.example.data.subscription.SubscriptionManager.isPro.value
                             val shareText = buildString {
                                 if (cardEntity.showRecipient && cardEntity.recipientName.isNotBlank()) {
                                     append("To ${cardEntity.recipientName}:\n\n")
@@ -227,7 +228,9 @@ fun MyCardsScreen(
                                 if (cardEntity.showSender && cardEntity.senderName.isNotBlank()) {
                                     append("\n\nFrom: ${cardEntity.senderName}")
                                 }
-                                append("\n\n✨ Shared via Holiday Wishes")
+                                if (!isPro) {
+                                    append("\n\n✨ Made with Holiday Wishes 🎄")
+                                }
                             }
                             com.example.utils.ShareHelper.shareWish(context, shareText, "Holiday Greeting Card")
                         },

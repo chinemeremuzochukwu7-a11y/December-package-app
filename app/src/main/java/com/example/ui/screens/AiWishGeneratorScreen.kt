@@ -717,6 +717,29 @@ private fun GeneratedResultCard(
                     modifier = Modifier.testTag("ai_generated_text")
                 )
 
+                // App watermark for free users (removed for Pro users)
+                val isProUser by SubscriptionManager.isPro.collectAsStateWithLifecycle()
+                if (!isProUser) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                        border = BorderStroke(0.8.dp, HolidayGold.copy(alpha = 0.35f))
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                        ) {
+                            Text(
+                                text = "✨ Made with Holiday Wishes 🎄",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(20.dp))
 
                 // Action buttons row: Copy, Share, Save, Create Card, Generate Again
@@ -727,7 +750,10 @@ private fun GeneratedResultCard(
                 ) {
                     // Copy button
                     OutlinedButton(
-                        onClick = { ClipboardHelper.copyText(context, result.text, "Wish copied! ✨") },
+                        onClick = {
+                            val textToCopy = if (isProUser) result.text else "${result.text}\n\n✨ Made with Holiday Wishes 🎄"
+                            ClipboardHelper.copyText(context, textToCopy, "Wish copied! ✨")
+                        },
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.weight(1f).testTag("ai_copy_button"),
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp)

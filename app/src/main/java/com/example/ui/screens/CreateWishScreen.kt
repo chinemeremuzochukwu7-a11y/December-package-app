@@ -58,6 +58,7 @@ import com.example.model.WishGenerationResult
 import com.example.ui.theme.HolidayCrimson
 import com.example.ui.theme.HolidayGold
 import com.example.ui.viewmodel.HolidayViewModel
+import com.example.data.subscription.SubscriptionManager
 import com.example.utils.ClipboardHelper
 import com.example.utils.ShareHelper
 
@@ -395,6 +396,24 @@ private fun GeneratedWishCard(
                 color = MaterialTheme.colorScheme.onSurface
             )
 
+            val isProUser by SubscriptionManager.isPro.collectAsStateWithLifecycle()
+            if (!isProUser) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                    border = BorderStroke(0.8.dp, HolidayGold.copy(alpha = 0.35f))
+                ) {
+                    Text(
+                        text = "✨ Made with Holiday Wishes 🎄",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                    )
+                }
+            }
+
             Spacer(modifier = Modifier.height(14.dp))
 
             Row(
@@ -402,7 +421,10 @@ private fun GeneratedWishCard(
                 horizontalArrangement = Arrangement.End
             ) {
                 IconButton(
-                    onClick = { ClipboardHelper.copyText(context, result.wishText) },
+                    onClick = {
+                        val textToCopy = if (isProUser) result.wishText else "${result.wishText}\n\n✨ Made with Holiday Wishes 🎄"
+                        ClipboardHelper.copyText(context, textToCopy)
+                    },
                     modifier = Modifier.testTag("copy_generated_button")
                 ) {
                     Icon(

@@ -966,13 +966,16 @@ private fun shareCardAction(
     message: String,
     sender: String
 ) {
+    val isPro = com.example.data.subscription.SubscriptionManager.isPro.value
     if (view != null) {
         val bitmap = CardImageExporter.viewToBitmap(view)
         val shareText = buildString {
             if (recipient.isNotBlank()) append("To $recipient:\n\n")
             append(message)
             if (sender.isNotBlank()) append("\n\nFrom: $sender")
-            append("\n\n✨ Created with Holiday Wishes")
+            if (!isPro) {
+                append("\n\n✨ Made with Holiday Wishes 🎄")
+            }
         }
         CardImageExporter.shareCardImage(context, bitmap, templateTitle, shareText)
     } else {
