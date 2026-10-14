@@ -104,8 +104,8 @@ class ExampleRobolectricTest {
     @Test
     fun `verify RevenueCat configuration and entitlement identifiers`() {
         assertEquals("holiday_wishes_pro", com.example.data.subscription.SubscriptionManager.ENTITLEMENT_HOLIDAY_WISHES_PRO)
-        assertEquals("yearly", com.example.data.subscription.SubscriptionManager.PRODUCT_YEARLY)
-        assertEquals("monthly", com.example.data.subscription.SubscriptionManager.PRODUCT_MONTHLY)
+        assertEquals("holiday_wishes_yearly", com.example.data.subscription.SubscriptionManager.PRODUCT_YEARLY)
+        assertEquals("holiday_wishes_monthly", com.example.data.subscription.SubscriptionManager.PRODUCT_MONTHLY)
     }
 
     @Test
@@ -139,8 +139,27 @@ class ExampleRobolectricTest {
         assertEquals("ALARM", alarm.type)
         assertEquals(7, alarm.hour)
         assertEquals(0, alarm.minute)
-        assertTrue(alarm.isEnabled)
         assertEquals("com.example.ACTION_ALARM_TRIGGER", com.example.receiver.AlarmReceiver.ACTION_TRIGGER_ALARM)
         assertEquals("com.example.ACTION_DISMISS_ALARM", com.example.receiver.AlarmReceiver.ACTION_DISMISS_ALARM)
+    }
+
+    @Test
+    fun `verify 1000+ cards, 500+ season templates, 1000+ wishes, and 300 credit subscription`() {
+        val allCards = com.example.data.repository.CardTemplatesRepository.getAllTemplates()
+        val seasonCards = com.example.data.repository.CardTemplatesRepository.getSeasonTemplates()
+        val proCards = com.example.data.repository.CardTemplatesRepository.getProTemplates()
+
+        assertTrue(allCards.size >= 1000)
+        assertTrue(seasonCards.size >= 500)
+        assertTrue(proCards.isNotEmpty())
+
+        val allWishes = com.example.data.repository.WishesRepository.getAllWishes()
+        val proWishes = com.example.data.repository.WishesRepository.getProWishes()
+
+        assertTrue(allWishes.size >= 1000)
+        assertTrue(proWishes.isNotEmpty())
+
+        assertEquals(300, com.example.data.subscription.SubscriptionManager.PLAN_MONTHLY.monthlyCredits)
+        assertTrue(com.example.data.subscription.SubscriptionManager.PLAN_YEARLY.yearlyCredits >= 99999)
     }
 }

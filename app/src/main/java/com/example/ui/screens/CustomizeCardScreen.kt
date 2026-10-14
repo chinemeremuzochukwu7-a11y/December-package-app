@@ -29,6 +29,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
@@ -39,10 +40,20 @@ import androidx.compose.material.icons.filled.FormatAlignRight
 import androidx.compose.material.icons.filled.MonetizationOn
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Stars
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material3.AlertDialog
+import com.example.model.CardTemplate
+import com.example.model.CardOccasion
+import com.example.ui.components.ScheduleGreetingDialog
+import java.io.File
+import java.io.FileOutputStream
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -80,6 +91,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.ui.components.CardPreviewView
+import com.example.ui.components.ProUpgradeDialog
 import com.example.ui.theme.HolidayCrimson
 import com.example.ui.theme.HolidayGold
 import com.example.ui.theme.HolidayPineGreen
@@ -108,6 +120,8 @@ fun CustomizeCardScreen(
     val cardPhotoUri by viewModel.cardPhotoUri.collectAsStateWithLifecycle()
 
     var cardViewRef by remember { mutableStateOf<View?>(null) }
+    var cardBounds by remember { mutableStateOf<Rect?>(null) }
+    var selectedTextLength by remember { mutableStateOf(CardTextLength.MEDIUM) }
     var isFlipped by remember { mutableStateOf(false) }
     val flipAngle by animateFloatAsState(
         targetValue = if (isFlipped) 180f else 0f,
@@ -130,7 +144,7 @@ fun CustomizeCardScreen(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
         if (isGranted) {
-            saveCardImageToGallery(context, cardViewRef, template.title)
+            saveCardImageToGallery(context, cardViewRef, cardBounds, template.title)
         } else {
             Toast.makeText(context, "Storage permission is needed to save to gallery", Toast.LENGTH_LONG).show()
         }
@@ -139,6 +153,10 @@ fun CustomizeCardScreen(
     val credits by SubscriptionManager.credits.collectAsStateWithLifecycle()
     val isPro by SubscriptionManager.isPro.collectAsStateWithLifecycle()
     var showCreditDialog by remember { mutableStateOf(false) }
+    var showProUpgradeDialog by remember { mutableStateOf(false) }
+    var showScheduleDialog by remember { mutableStateOf(false) }
+    var showDownloadSuccessDialog by remember { mutableStateOf(false) }
+    var cachedImagePath by remember { mutableStateOf<String?>(null) }
     val activity = context as? Activity
 
     val executeCardActionWithCredits = { onProceed: () -> Unit ->
@@ -174,11 +192,12 @@ fun CustomizeCardScreen(
         if (isPro) {
             shareCardAction(
                 context = context,
-                view = cardViewRef,
+                template = template,
                 templateTitle = template.title,
                 recipient = recipientName,
                 message = customMessage,
-                sender = senderName
+                sender = senderName,
+                fontStyle = cardFontStyle
             )
         } else {
             if (activity != null) {
@@ -188,22 +207,24 @@ fun CustomizeCardScreen(
                     onDismiss = {
                         shareCardAction(
                             context = context,
-                            view = cardViewRef,
+                            template = template,
                             templateTitle = template.title,
                             recipient = recipientName,
                             message = customMessage,
-                            sender = senderName
+                            sender = senderName,
+                            fontStyle = cardFontStyle
                         )
                     }
                 )
             } else {
                 shareCardAction(
                     context = context,
-                    view = cardViewRef,
+                    template = template,
                     templateTitle = template.title,
                     recipient = recipientName,
                     message = customMessage,
-                    sender = senderName
+                    sender = senderName,
+                    fontStyle = cardFontStyle
                 )
             }
         }
@@ -221,16 +242,27 @@ fun CustomizeCardScreen(
                 )
             },
             confirmButton = {
-                Button(
-                    onClick = {
-                        showCreditDialog = false
-                        if (activity != null) {
-                            AdManager.showRewardedAd(activity)
-                        }
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = HolidayCrimson)
-                ) {
-                    Text("Watch Ad (+1 Credit)")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = {
+                            showCreditDialog = false
+                            if (activity != null) {
+                                AdManager.showRewardedAd(activity)
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = HolidayCrimson)
+                    ) {
+                        Text("Watch Ad (+1)")
+                    }
+                    Button(
+                        onClick = {
+                            showCreditDialog = false
+                            showProUpgradeDialog = true
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = HolidayGold)
+                    ) {
+                        Text("Upgrade Pro", color = Color(0xFF332000), fontWeight = FontWeight.Bold)
+                    }
                 }
             },
             dismissButton = {
@@ -239,6 +271,96 @@ fun CustomizeCardScreen(
                 ) {
                     Text("Cancel")
                 }
+            }
+        )
+    }
+
+    if (showProUpgradeDialog) {
+        ProUpgradeDialog(
+            targetTemplate = template,
+            onPurchaseTier = { tierId ->
+                viewModel.purchaseProTier(tierId)
+                Toast.makeText(context, "Welcome to Holiday Wishes Pro! Watermark removed! 🎉", Toast.LENGTH_LONG).show()
+                showProUpgradeDialog = false
+            },
+            onWatchRewardedAd = {
+                viewModel.unlockCardViaRewardedAd(template.id)
+                Toast.makeText(context, "Card unlocked! 🎄", Toast.LENGTH_SHORT).show()
+                showProUpgradeDialog = false
+            },
+            onRestorePurchases = {
+                val restored = viewModel.restorePurchases()
+                Toast.makeText(
+                    context,
+                    if (restored) "Purchases restored! Active Pro access confirmed."
+                    else "No existing purchases found.",
+                    Toast.LENGTH_SHORT
+                ).show()
+            },
+            onDismiss = { showProUpgradeDialog = false }
+        )
+    }
+
+    // Dialog showing confirmation and next steps when card is downloaded
+    if (showDownloadSuccessDialog) {
+        AlertDialog(
+            onDismissRequest = { showDownloadSuccessDialog = false },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("📥", fontSize = 24.sp)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Card Downloaded to Device!", fontWeight = FontWeight.Bold)
+                }
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "Your holiday card has been saved in full HD to your device's Photos/Gallery (in Pictures/HolidayWishes).",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Text(
+                        "You can also schedule it right now to automatically deliver on WhatsApp or other media at any exact time & date!",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showDownloadSuccessDialog = false
+                        showScheduleDialog = true
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = HolidayCrimson),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Icon(Icons.Default.AccessTime, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Schedule Auto-Send ⏰", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDownloadSuccessDialog = false }) {
+                    Text("Done")
+                }
+            }
+        )
+    }
+
+    // Schedule Delivery Dialog for exact date and time
+    if (showScheduleDialog) {
+        ScheduleGreetingDialog(
+            greetingTitle = template.title,
+            initialRecipientName = recipientName,
+            messageText = customMessage,
+            cardImagePath = cachedImagePath,
+            onDismiss = { showScheduleDialog = false },
+            onScheduledSuccess = { formattedDateTime ->
+                Toast.makeText(
+                    context,
+                    "Greeting scheduled for $formattedDateTime! 🚀 You will receive a high-priority prompt to send on WhatsApp when the time arrives.",
+                    Toast.LENGTH_LONG
+                ).show()
             }
         )
     }
@@ -429,6 +551,9 @@ fun CustomizeCardScreen(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .onGloballyPositioned { coordinates ->
+                                cardBounds = coordinates.boundsInRoot()
+                            }
                             .graphicsLayer {
                                 rotationY = flipAngle
                                 cameraDistance = 14f * density
@@ -451,6 +576,62 @@ fun CustomizeCardScreen(
                                 .fillMaxWidth()
                                 .testTag("live_card_preview")
                         )
+                    }
+                }
+            }
+
+            // Remove Watermark Banner for Free Users
+            if (!isPro) {
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = HolidayGold.copy(alpha = 0.12f),
+                    border = BorderStroke(1.dp, HolidayGold.copy(alpha = 0.45f)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showProUpgradeDialog = true }
+                        .testTag("remove_watermark_banner")
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(text = "👑", fontSize = 18.sp)
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = "Watermark included on free cards",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = "Upgrade to Pro ($9.99/mo or $79/yr) to remove watermark & unlock all luxury cards",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontSize = 11.5.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = HolidayGold,
+                            modifier = Modifier.padding(start = 8.dp)
+                        ) {
+                            Text(
+                                text = "Remove",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = Color(0xFF332000),
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -494,19 +675,30 @@ fun CustomizeCardScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        // Save Image to Gallery Button
-                        OutlinedButton(
+                        // Download Card to Device Button
+                        Button(
                             onClick = {
                                 executeCardActionWithCredits {
-                                    if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P) {
-                                        permissionLauncher.launch(android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                                    val pristineBitmap = CardImageExporter.renderCardBitmap(
+                                        template = template,
+                                        customTitle = template.title,
+                                        recipientName = recipientName,
+                                        customMessage = customMessage,
+                                        senderName = senderName,
+                                        fontStyle = cardFontStyle,
+                                        isPro = isPro
+                                    )
+                                    val success = CardImageExporter.saveBitmapToGallery(context, pristineBitmap, template.title)
+                                    if (success) {
+                                        Toast.makeText(context, "Card downloaded to device gallery! 📥✨", Toast.LENGTH_LONG).show()
+                                        showDownloadSuccessDialog = true
                                     } else {
-                                        saveCardImageToGallery(context, cardViewRef, template.title)
+                                        Toast.makeText(context, "Could not save card to gallery", Toast.LENGTH_SHORT).show()
                                     }
                                 }
                             },
+                            colors = ButtonDefaults.buttonColors(containerColor = HolidayPineGreen),
                             shape = RoundedCornerShape(12.dp),
-                            border = BorderStroke(1.5.dp, HolidayPineGreen),
                             modifier = Modifier
                                 .weight(1f)
                                 .height(46.dp)
@@ -515,25 +707,25 @@ fun CustomizeCardScreen(
                             Icon(
                                 imageVector = Icons.Default.Download,
                                 contentDescription = null,
-                                tint = HolidayPineGreen,
+                                tint = Color.White,
                                 modifier = Modifier.size(18.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "Save Image",
-                                color = HolidayPineGreen,
+                                text = "Download Card",
+                                color = Color.White,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 13.sp
                             )
                         }
 
                         // Share Card Button
-                        Button(
+                        OutlinedButton(
                             onClick = {
                                 executeCardShare()
                             },
-                            colors = ButtonDefaults.buttonColors(containerColor = HolidayGold),
                             shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(1.5.dp, HolidayGold),
                             modifier = Modifier
                                 .weight(1f)
                                 .height(46.dp)
@@ -553,6 +745,45 @@ fun CustomizeCardScreen(
                                 fontSize = 13.sp
                             )
                         }
+                    }
+
+                    // Schedule Auto-Send at exact date and time
+                    OutlinedButton(
+                        onClick = {
+                            if (cardViewRef != null) {
+                                try {
+                                    val bitmap = CardImageExporter.viewToBitmap(cardViewRef!!)
+                                    val cacheFolder = File(context.cacheDir, "images")
+                                    if (!cacheFolder.exists()) cacheFolder.mkdirs()
+                                    val cacheFile = File(cacheFolder, "card_sched_${System.currentTimeMillis()}.png")
+                                    val stream = FileOutputStream(cacheFile)
+                                    bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, stream)
+                                    stream.close()
+                                    cachedImagePath = cacheFile.absolutePath
+                                } catch (ignored: Exception) {}
+                            }
+                            showScheduleDialog = true
+                        },
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.5.dp, HolidayCrimson),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(46.dp)
+                            .testTag("schedule_send_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AccessTime,
+                            contentDescription = null,
+                            tint = HolidayCrimson,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Schedule Auto-Send (WhatsApp / Media)",
+                            color = HolidayCrimson,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp
+                        )
                     }
                 }
             }
@@ -591,6 +822,118 @@ fun CustomizeCardScreen(
                             .fillMaxWidth()
                             .testTag("recipient_name_input")
                     )
+
+                    // Text Length Selection & Token Deduction Generator
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = HolidayCrimson.copy(alpha = 0.08f),
+                        border = BorderStroke(1.dp, HolidayCrimson.copy(alpha = 0.25f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.AutoAwesome,
+                                        contentDescription = null,
+                                        tint = HolidayGold,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "AI Greeting Length",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = HolidayGold.copy(alpha = 0.2f),
+                                    border = BorderStroke(1.dp, HolidayGold)
+                                ) {
+                                    Text(
+                                        text = "Cost: ${selectedTextLength.tokensRequired} 🪙",
+                                        fontSize = 11.5.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = HolidayGold,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                    )
+                                }
+                            }
+
+                            // Length selection chips
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                CardTextLength.values().forEach { lengthOption ->
+                                    val isSelected = selectedTextLength == lengthOption
+                                    FilterChip(
+                                        selected = isSelected,
+                                        onClick = { selectedTextLength = lengthOption },
+                                        label = {
+                                            Column {
+                                                Text(
+                                                    lengthOption.label,
+                                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                                    fontSize = 12.sp
+                                                )
+                                                Text(
+                                                    lengthOption.approxWords,
+                                                    fontSize = 9.sp,
+                                                    color = if (isSelected) Color.White.copy(alpha = 0.85f) else MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                        },
+                                        modifier = Modifier.weight(1f).testTag("length_chip_${lengthOption.name.lowercase()}"),
+                                        colors = FilterChipDefaults.filterChipColors(
+                                            selectedContainerColor = HolidayCrimson,
+                                            selectedLabelColor = Color.White
+                                        )
+                                    )
+                                }
+                            }
+
+                            // Generate and Deduct Tokens Button
+                            Button(
+                                onClick = {
+                                    val tokensNeeded = selectedTextLength.tokensRequired
+                                    if (SubscriptionManager.hasEnoughCredits(tokensNeeded)) {
+                                        SubscriptionManager.useCredits(tokensNeeded)
+                                        val generatedMsg = generateCardMessage(template, recipientName, senderName, selectedTextLength)
+                                        viewModel.updateCardMessage(generatedMsg)
+                                        Toast.makeText(
+                                            context,
+                                            "Generated ${selectedTextLength.label} greeting! Used $tokensNeeded tokens 🪙",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    } else {
+                                        showCreditDialog = true
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = HolidayCrimson),
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("generate_greeting_button")
+                            ) {
+                                Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    "Generate ${selectedTextLength.label} Greeting (${selectedTextLength.tokensRequired} Tokens 🪙)",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp
+                                )
+                            }
+                        }
+                    }
 
                     // Personal Message Field
                     OutlinedTextField(
@@ -944,15 +1287,33 @@ private fun AlignChip(
     )
 }
 
-private fun saveCardImageToGallery(context: Context, view: View?, title: String) {
+private fun saveCardImageToGallery(
+    context: Context,
+    view: View?,
+    bounds: Rect?,
+    title: String,
+    onSuccess: ((String?) -> Unit)? = null
+) {
     if (view == null) {
         Toast.makeText(context, "Card preview not ready yet", Toast.LENGTH_SHORT).show()
         return
     }
-    val bitmap = CardImageExporter.viewToBitmap(view)
+    val bitmap = CardImageExporter.viewToBitmap(view, bounds)
     val success = CardImageExporter.saveBitmapToGallery(context, bitmap, title)
+    var cachedPath: String? = null
+    try {
+        val cacheFolder = File(context.cacheDir, "images")
+        if (!cacheFolder.exists()) cacheFolder.mkdirs()
+        val cacheFile = File(cacheFolder, "card_${System.currentTimeMillis()}.png")
+        val stream = FileOutputStream(cacheFile)
+        bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, stream)
+        stream.close()
+        cachedPath = cacheFile.absolutePath
+    } catch (ignored: Exception) {}
+
     if (success) {
-        Toast.makeText(context, "Card saved to your gallery! ✨", Toast.LENGTH_LONG).show()
+        Toast.makeText(context, "Card downloaded to device gallery! 📥✨", Toast.LENGTH_LONG).show()
+        onSuccess?.invoke(cachedPath)
     } else {
         Toast.makeText(context, "Failed to save card to gallery", Toast.LENGTH_SHORT).show()
     }
@@ -960,26 +1321,85 @@ private fun saveCardImageToGallery(context: Context, view: View?, title: String)
 
 private fun shareCardAction(
     context: Context,
-    view: View?,
+    template: CardTemplate,
     templateTitle: String,
     recipient: String,
     message: String,
-    sender: String
+    sender: String,
+    fontStyle: String = "Classic"
 ) {
     val isPro = com.example.data.subscription.SubscriptionManager.isPro.value
-    if (view != null) {
-        val bitmap = CardImageExporter.viewToBitmap(view)
-        val shareText = buildString {
-            if (recipient.isNotBlank()) append("To $recipient:\n\n")
-            append(message)
-            if (sender.isNotBlank()) append("\n\nFrom: $sender")
-            if (!isPro) {
-                append("\n\n✨ Made with Holiday Wishes 🎄")
+    val bitmap = CardImageExporter.renderCardBitmap(
+        template = template,
+        customTitle = templateTitle,
+        recipientName = recipient,
+        customMessage = message,
+        senderName = sender,
+        fontStyle = fontStyle,
+        isPro = isPro
+    )
+    val shareText = buildString {
+        if (recipient.isNotBlank()) append("To $recipient:\n\n")
+        append(message)
+        if (sender.isNotBlank()) append("\n\nFrom: $sender")
+        if (!isPro) {
+            append("\n\n✨ Made with Holiday Wishes 🎄")
+        }
+    }
+    CardImageExporter.shareCardImage(context, bitmap, templateTitle, shareText)
+}
+
+enum class CardTextLength(val label: String, val approxWords: String, val tokensRequired: Int) {
+    SHORT("Short", "15-25 words", 5),
+    MEDIUM("Medium", "40-60 words", 10),
+    LONG("Long", "80-120 words", 15)
+}
+
+private fun generateCardMessage(
+    template: CardTemplate,
+    recipientName: String,
+    senderName: String,
+    length: CardTextLength
+): String {
+    val name = if (recipientName.isNotBlank()) recipientName else "friend"
+    val occasion = template.occasion
+
+    return when (length) {
+        CardTextLength.SHORT -> {
+            when (occasion) {
+                CardOccasion.CHRISTMAS ->
+                    "Wishing you peace, cozy warmth, and boundless joy this Christmas, $name! May your season be filled with love."
+                CardOccasion.NEW_YEAR ->
+                    "Cheers to 365 days of health, happiness, and extraordinary success in the New Year, $name!"
+                CardOccasion.HOLIDAY_SEASON ->
+                    "Sending you warm holiday greetings, $name! May this festive season surround your home in peaceful light."
+                else ->
+                    "Sending you warm holiday greetings, $name! May this festive season surround your home in peaceful light."
             }
         }
-        CardImageExporter.shareCardImage(context, bitmap, templateTitle, shareText)
-    } else {
-        // Fallback to text sharing
-        com.example.utils.ShareHelper.shareCard(context, templateTitle, recipient, message, sender)
+        CardTextLength.MEDIUM -> {
+            when (occasion) {
+                CardOccasion.CHRISTMAS ->
+                    "May the wonder and cozy warmth of Christmas illuminate your heart, $name. Wishing you and your family serene peace, delicious feasts, sparkling laughter, and cherished memories that last forever!"
+                CardOccasion.NEW_YEAR ->
+                    "Happy New Year, $name! May the coming chapter open brilliant doors of new opportunities, vibrant good health, and joyful breakthroughs. Step boldly into your brightest year yet!"
+                CardOccasion.HOLIDAY_SEASON ->
+                    "As the snow falls softly and holiday lights glow warm by the fireside, I am sending you my heartfelt blessings, $name. May this festive season bring restful moments, comforting smiles, and deep happiness."
+                else ->
+                    "As the snow falls softly and holiday lights glow warm by the fireside, I am sending you my heartfelt blessings, $name. May this festive season bring restful moments, comforting smiles, and deep happiness."
+            }
+        }
+        CardTextLength.LONG -> {
+            when (occasion) {
+                CardOccasion.CHRISTMAS ->
+                    "Merry Christmas, dearest $name! As the tree lights twinkle and carolers sing of peace on Earth, may your home become a peaceful sanctuary of love and joyous togetherness. May the quiet miracles of the holiday season fill your heart with hope, provide healing and comfort, and surround you with the laughter of those you hold dear. Here is to a joyful, blessed Christmas!"
+                CardOccasion.NEW_YEAR ->
+                    "Wishing you a magnificent and prosperous New Year, $name! May every morning of the coming year greet you with renewed strength, sharp clarity, and bold ambition. Leave all burdens behind in the old year, and welcome the unlimited possibilities waiting ahead. May your family be blessed with radiant health, financial abundance, and everlasting peace of mind."
+                CardOccasion.HOLIDAY_SEASON ->
+                    "Warmest seasonal greetings to you and yours, $name! The holiday season is a beautiful reminder to pause, count our blessings, and celebrate the gift of shared friendship and family. May your days be wrapped in cozy sweaters, sweet cinnamon treats, and heartwarming conversations. May the glow of the holidays guide your steps with peace, harmony, and joy all winter long."
+                else ->
+                    "Warmest seasonal greetings to you and yours, $name! The holiday season is a beautiful reminder to pause, count our blessings, and celebrate the gift of shared friendship and family. May your days be wrapped in cozy sweaters, sweet cinnamon treats, and heartwarming conversations. May the glow of the holidays guide your steps with peace, harmony, and joy all winter long."
+            }
+        }
     }
 }

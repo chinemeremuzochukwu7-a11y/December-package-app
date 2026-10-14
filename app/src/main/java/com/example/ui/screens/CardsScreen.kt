@@ -68,7 +68,7 @@ import com.example.ui.viewmodel.HolidayViewModel
 import com.example.utils.ShareHelper
 
 enum class CardFilterType {
-    ALL, PRO_ONLY, FREE_ONLY, CHRISTMAS, NEW_YEAR
+    ALL, SEASON, CHRISTMAS, NEW_YEAR, PRO_ONLY, FREE_ONLY
 }
 
 @Composable
@@ -91,10 +91,11 @@ fun CardsScreen(
 
     val filteredTemplates = when (selectedFilter) {
         CardFilterType.ALL -> CardTemplatesRepository.getAllTemplates()
-        CardFilterType.PRO_ONLY -> CardTemplatesRepository.getProTemplates()
-        CardFilterType.FREE_ONLY -> CardTemplatesRepository.getFreeTemplates()
+        CardFilterType.SEASON -> CardTemplatesRepository.getSeasonTemplates()
         CardFilterType.CHRISTMAS -> CardTemplatesRepository.getChristmasTemplates()
         CardFilterType.NEW_YEAR -> CardTemplatesRepository.getNewYearTemplates()
+        CardFilterType.PRO_ONLY -> CardTemplatesRepository.getProTemplates()
+        CardFilterType.FREE_ONLY -> CardTemplatesRepository.getFreeTemplates()
     }
 
     Column(
@@ -140,7 +141,7 @@ fun CardsScreen(
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
-                                text = "Unlock 8+ luxury cards from $4.99 or with short videos",
+                                text = "Unlock 1,000+ luxury cards with Pro ($9.99/mo) or daily rewarded ads",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 11.5.sp
@@ -209,16 +210,10 @@ fun CardsScreen(
                     modifier = Modifier.testTag("filter_all_cards")
                 )
                 CategoryPill(
-                    text = "👑 Pro (${CardTemplatesRepository.getProTemplates().size})",
-                    isSelected = selectedFilter == CardFilterType.PRO_ONLY,
-                    onClick = { selectedFilter = CardFilterType.PRO_ONLY },
-                    modifier = Modifier.testTag("filter_pro_cards")
-                )
-                CategoryPill(
-                    text = "✨ Free (${CardTemplatesRepository.getFreeTemplates().size})",
-                    isSelected = selectedFilter == CardFilterType.FREE_ONLY,
-                    onClick = { selectedFilter = CardFilterType.FREE_ONLY },
-                    modifier = Modifier.testTag("filter_free_cards")
+                    text = "❄️ Season (${CardTemplatesRepository.getSeasonTemplates().size})",
+                    isSelected = selectedFilter == CardFilterType.SEASON,
+                    onClick = { selectedFilter = CardFilterType.SEASON },
+                    modifier = Modifier.testTag("filter_season_cards")
                 )
                 CategoryPill(
                     text = "🎄 Christmas (${CardTemplatesRepository.getChristmasTemplates().size})",
@@ -231,6 +226,18 @@ fun CardsScreen(
                     isSelected = selectedFilter == CardFilterType.NEW_YEAR,
                     onClick = { selectedFilter = CardFilterType.NEW_YEAR },
                     modifier = Modifier.testTag("filter_newyear_cards")
+                )
+                CategoryPill(
+                    text = "👑 Pro (${CardTemplatesRepository.getProTemplates().size})",
+                    isSelected = selectedFilter == CardFilterType.PRO_ONLY,
+                    onClick = { selectedFilter = CardFilterType.PRO_ONLY },
+                    modifier = Modifier.testTag("filter_pro_cards")
+                )
+                CategoryPill(
+                    text = "✨ Free (${CardTemplatesRepository.getFreeTemplates().size})",
+                    isSelected = selectedFilter == CardFilterType.FREE_ONLY,
+                    onClick = { selectedFilter = CardFilterType.FREE_ONLY },
+                    modifier = Modifier.testTag("filter_free_cards")
                 )
             }
 

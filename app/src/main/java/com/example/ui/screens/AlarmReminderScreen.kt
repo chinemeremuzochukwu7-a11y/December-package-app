@@ -78,12 +78,18 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.local.AlarmEntity
+import com.example.data.local.ScheduledGreetingEntity
 import com.example.data.repository.TrackersRepository
 import com.example.receiver.AlarmReceiver
+import com.example.ui.components.ScheduleGreetingDialog
 import com.example.ui.theme.HolidayCrimson
 import com.example.ui.theme.HolidayGold
 import com.example.ui.theme.HolidayPineGreen
+import com.example.utils.WishExporter
+import androidx.compose.material.icons.filled.Send
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -96,8 +102,9 @@ fun AlarmReminderScreen(
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
-    var selectedTab by remember { mutableIntStateOf(0) } // 0 = Alarms, 1 = Reminders
+    var selectedTab by remember { mutableIntStateOf(0) } // 0 = Alarms, 1 = Reminders, 2 = Scheduled Greetings
     val allAlarms by repository.getAllAlarms().collectAsState(initial = emptyList())
+    val allScheduledGreetings by repository.getAllScheduledGreetings().collectAsState(initial = emptyList())
 
     val filteredList = remember(allAlarms, selectedTab) {
         val targetType = if (selectedTab == 0) "ALARM" else "REMINDER"
@@ -105,6 +112,7 @@ fun AlarmReminderScreen(
     }
 
     var showAddDialog by remember { mutableStateOf(false) }
+    var showScheduleGreetingDialog by remember { mutableStateOf(false) }
     var isTestingSound by remember { mutableStateOf(false) }
 
     val holidayPresets = remember {
@@ -120,12 +128,19 @@ fun AlarmReminderScreen(
     Scaffold(
         floatingActionButton = {
             FloatingActionButton(
-                onClick = { showAddDialog = true },
-                containerColor = if (selectedTab == 0) HolidayCrimson else HolidayPineGreen,
-                contentColor = Color.White,
+                onClick = {
+                    if (selectedTab == 2) showScheduleGreetingDialog = true
+                    else showAddDialog = true
+                },
+                containerColor = when (selectedTab) {
+                    0 -> HolidayCrimson
+                    1 -> HolidayPineGreen
+                    else -> HolidayGold
+                },
+                contentColor = if (selectedTab == 2) Color(0xFF332000) else Color.White,
                 modifier = Modifier.testTag("add_alarm_fab")
             ) {
-                Icon(imageVector = Icons.Default.Add, contentDescription = "Add Alarm or Reminder")
+                Icon(imageVector = Icons.Default.Add, contentDescription = "Add Alarm, Reminder or Greeting")
             }
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -238,7 +253,7 @@ fun AlarmReminderScreen(
                 }
             }
 
-            // Tab Selector: Alarms vs Reminders
+            // Tab Selector: Alarms vs Reminders vs Auto-Send Greetings
             TabRow(
                 selectedTabIndex = selectedTab,
                 containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
@@ -250,8 +265,8 @@ fun AlarmReminderScreen(
                     text = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.Alarm, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Alarms (Loud Sound)", fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Alarms", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                         }
                     }
                 )
@@ -261,8 +276,19 @@ fun AlarmReminderScreen(
                     text = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.Notifications, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Reminders (Alerts)", fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Reminders", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        }
+                    }
+                )
+                Tab(
+                    selected = selectedTab == 2,
+                    onClick = { selectedTab = 2 },
+                    text = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("💬", fontSize = 14.sp)
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Auto-Send", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                         }
                     }
                 )
@@ -270,120 +296,282 @@ fun AlarmReminderScreen(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Quick Presets Row
-            Text(
-                text = "Quick Holiday Presets",
-                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-            )
-
-            LazyRow(
-                contentPadding = PaddingValues(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(holidayPresets) { preset ->
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant,
-                        modifier = Modifier.clickable {
-                            scope.launch {
-                                repository.saveAlarm(
-                                    AlarmEntity(
-                                        title = preset.first,
-                                        type = preset.third,
-                                        hour = preset.second.first,
-                                        minute = preset.second.second,
-                                        isEnabled = true,
-                                        repeatMode = "Daily"
-                                    )
-                                )
-                                snackbarHostState.showSnackbar("Scheduled: ${preset.first} at ${formatTime(preset.second.first, preset.second.second)}")
+            if (selectedTab == 2) {
+                // Scheduled Greetings View
+                if (allScheduledGreetings.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(32.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Text(text = "🚀", fontSize = 48.sp)
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = "No Scheduled Greetings Yet",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "When you create a card or wish, you can schedule the exact time & date. When that moment arrives, the app automatically triggers delivery to the recipient on WhatsApp or media!",
+                                style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Button(
+                                onClick = { showScheduleGreetingDialog = true },
+                                colors = ButtonDefaults.buttonColors(containerColor = HolidayCrimson)
+                            ) {
+                                Icon(Icons.Default.Send, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Schedule a Greeting Now")
                             }
                         }
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(text = if (preset.third == "ALARM") "⏰" else "🔔", fontSize = 12.sp)
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = "${preset.first} (${formatTime(preset.second.first, preset.second.second)})",
-                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium)
-                            )
-                        }
                     }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            // Alarms / Reminders List
-            if (filteredList.isEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(32.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
+                } else {
+                    val dateFormat = remember { SimpleDateFormat("EEE, MMM d • hh:mm a", Locale.getDefault()) }
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 80.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Text(text = if (selectedTab == 0) "⏰" else "🔔", fontSize = 48.sp)
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text(
-                            text = if (selectedTab == 0) "No alarms set yet" else "No reminders set yet",
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = if (selectedTab == 0)
-                                "Set holiday wake-up alarms. When the time arrives, the alarm will ring and sound alerts immediately."
-                            else
-                                "Set reminders for holiday gift shopping, sending wishes, and calling friends.",
-                            style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Button(
-                            onClick = { showAddDialog = true },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (selectedTab == 0) HolidayCrimson else HolidayPineGreen
-                            )
-                        ) {
-                            Icon(Icons.Default.Add, contentDescription = null)
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(if (selectedTab == 0) "Set Alarm" else "Set Reminder")
+                        items(allScheduledGreetings, key = { it.id }) { greeting ->
+                            Card(
+                                shape = RoundedCornerShape(16.dp),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                                border = androidx.compose.foundation.BorderStroke(
+                                    1.dp,
+                                    if (greeting.isDelivered) MaterialTheme.colorScheme.outlineVariant
+                                    else HolidayGold.copy(alpha = 0.5f)
+                                ),
+                                modifier = Modifier.fillMaxWidth().testTag("scheduled_greeting_${greeting.id}")
+                            ) {
+                                Column(modifier = Modifier.padding(14.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(if (greeting.targetPlatform == "WhatsApp") "💬" else "📤", fontSize = 18.sp)
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Column {
+                                                Text(
+                                                    text = "To: ${greeting.recipientName}",
+                                                    style = MaterialTheme.typography.titleSmall,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                                Text(
+                                                    text = dateFormat.format(Date(greeting.scheduledTimestamp)),
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = HolidayCrimson,
+                                                    fontWeight = FontWeight.SemiBold
+                                                )
+                                            }
+                                        }
+
+                                        IconButton(
+                                            onClick = {
+                                                scope.launch {
+                                                    repository.deleteScheduledGreeting(greeting.id)
+                                                    snackbarHostState.showSnackbar("Cancelled greeting to ${greeting.recipientName}")
+                                                }
+                                            }
+                                        ) {
+                                            Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f))
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(8.dp))
+
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text(
+                                            text = greeting.messageText,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            maxLines = 3,
+                                            modifier = Modifier.padding(10.dp)
+                                        )
+                                    }
+
+                                    Spacer(modifier = Modifier.height(10.dp))
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Surface(
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = if (greeting.isDelivered) HolidayPineGreen.copy(alpha = 0.15f) else HolidayGold.copy(alpha = 0.18f)
+                                        ) {
+                                            Text(
+                                                text = if (greeting.isDelivered) "Delivered / Ready" else "Scheduled ⏳",
+                                                fontSize = 11.5.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (greeting.isDelivered) HolidayPineGreen else Color(0xFF634700),
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                            )
+                                        }
+
+                                        Button(
+                                            onClick = {
+                                                WishExporter.sendDirectToWhatsApp(
+                                                    context = context,
+                                                    message = greeting.messageText,
+                                                    phoneNumber = greeting.recipientPhone
+                                                )
+                                            },
+                                            colors = ButtonDefaults.buttonColors(containerColor = HolidayPineGreen),
+                                            shape = RoundedCornerShape(8.dp)
+                                        ) {
+                                            Icon(Icons.Default.Send, contentDescription = null, modifier = Modifier.size(14.dp))
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text("Send on WhatsApp", fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
             } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 80.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                // Quick Presets Row
+                Text(
+                    text = "Quick Holiday Presets",
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                )
+
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(filteredList, key = { it.id }) { alarm ->
-                        AlarmItemCard(
-                            alarm = alarm,
-                            onToggle = { isChecked ->
+                    items(holidayPresets) { preset ->
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            modifier = Modifier.clickable {
                                 scope.launch {
-                                    repository.toggleAlarmEnabled(alarm.id, isChecked)
-                                    val statusMsg = if (isChecked) "Enabled for ${formatTime(alarm.hour, alarm.minute)}" else "Turned off"
-                                    snackbarHostState.showSnackbar("${alarm.title}: $statusMsg")
-                                }
-                            },
-                            onDelete = {
-                                scope.launch {
-                                    repository.deleteAlarm(alarm.id)
+                                    repository.saveAlarm(
+                                        AlarmEntity(
+                                            title = preset.first,
+                                            type = preset.third,
+                                            hour = preset.second.first,
+                                            minute = preset.second.second,
+                                            isEnabled = true,
+                                            repeatMode = "Daily"
+                                        )
+                                    )
+                                    snackbarHostState.showSnackbar("Scheduled: ${preset.first} at ${formatTime(preset.second.first, preset.second.second)}")
                                 }
                             }
-                        )
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(text = if (preset.third == "ALARM") "⏰" else "🔔", fontSize = 12.sp)
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "${preset.first} (${formatTime(preset.second.first, preset.second.second)})",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Alarms / Reminders List
+                if (filteredList.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(32.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Text(text = if (selectedTab == 0) "⏰" else "🔔", fontSize = 48.sp)
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = if (selectedTab == 0) "No alarms set yet" else "No reminders set yet",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = if (selectedTab == 0)
+                                    "Set holiday wake-up alarms. When the time arrives, the alarm will ring and sound alerts immediately."
+                                else
+                                    "Set reminders for holiday gift shopping, sending wishes, and calling friends.",
+                                style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Button(
+                                onClick = { showAddDialog = true },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (selectedTab == 0) HolidayCrimson else HolidayPineGreen
+                                )
+                            ) {
+                                Icon(Icons.Default.Add, contentDescription = null)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(if (selectedTab == 0) "Set Alarm" else "Set Reminder")
+                            }
+                        }
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 80.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        items(filteredList, key = { it.id }) { alarm ->
+                            AlarmItemCard(
+                                alarm = alarm,
+                                onToggle = { isChecked ->
+                                    scope.launch {
+                                        repository.toggleAlarmEnabled(alarm.id, isChecked)
+                                        val statusMsg = if (isChecked) "Enabled for ${formatTime(alarm.hour, alarm.minute)}" else "Turned off"
+                                        snackbarHostState.showSnackbar("${alarm.title}: $statusMsg")
+                                    }
+                                },
+                                onDelete = {
+                                    scope.launch {
+                                        repository.deleteAlarm(alarm.id)
+                                    }
+                                }
+                            )
+                        }
                     }
                 }
             }
         }
+    }
+
+    if (showScheduleGreetingDialog) {
+        ScheduleGreetingDialog(
+            greetingTitle = "Holiday Wish",
+            initialRecipientName = "Friend",
+            messageText = "Wishing you a sparkling Christmas and a Joyful New Year filled with peace and happiness! 🎄✨",
+            onDismiss = { showScheduleGreetingDialog = false },
+            onScheduledSuccess = { timeStr ->
+                scope.launch {
+                    snackbarHostState.showSnackbar("Greeting scheduled for $timeStr! 🚀")
+                }
+            }
+        )
     }
 
     if (showAddDialog) {

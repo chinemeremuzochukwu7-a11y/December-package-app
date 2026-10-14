@@ -1,0 +1,8 @@
+{
+  "firestore": [
+    {
+      "database": "ai-studio-android-holidayw-036eb634-2771-4127-873e-ec1d4a2d7286",
+      "rules": "firestore.rules"
+    }
+  ]
+}

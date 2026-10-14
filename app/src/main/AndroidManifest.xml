@@ -89,6 +89,28 @@
                 <action android:name="com.example.ACTION_DISMISS_ALARM" />
             </intent-filter>
         </receiver>
+
+        <receiver
+            android:name=".receiver.ScheduledGreetingReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.example.ACTION_TRIGGER_SCHEDULED_GREETING" />
+                <action android:name="com.example.ACTION_DIRECT_WHATSAPP_SEND" />
+                <action android:name="com.example.ACTION_DISMISS_GREETING" />
+            </intent-filter>
+        </receiver>
     </application>
+
+    <queries>
+        <package android:name="com.whatsapp" />
+        <intent>
+            <action android:name="android.intent.action.SEND" />
+            <data android:mimeType="text/plain" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.SEND" />
+            <data android:mimeType="image/png" />
+        </intent>
+    </queries>
 
 </manifest>

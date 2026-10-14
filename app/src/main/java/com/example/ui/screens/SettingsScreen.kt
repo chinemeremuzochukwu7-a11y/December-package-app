@@ -229,7 +229,7 @@ fun SettingsScreen(
                 SettingsClickableItem(
                     icon = Icons.Default.AutoAwesome,
                     title = "Pro Membership & Plans",
-                    subtitle = if (isPro) "Active (holiday_wishes_pro)" else "Upgrade to Yearly or Monthly",
+                    subtitle = if (isPro) "Active (Holiday Wishes Pro)" else "Unlock Monthly ($9.99) or Yearly ($79 - Save 34%)",
                     onClick = onNavigateToPro,
                     testTag = "settings_plans_item"
                 )

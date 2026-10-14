@@ -17,37 +17,46 @@ data class PricingTier(
 )
 
 object PricingTiers {
-    val PRO_LIFETIME = PricingTier(
-        id = "holiday_wishes_pro_5",
-        title = "Holiday Wishes Pro",
-        priceDisplay = "$4.99",
-        priceNumeric = 4.99,
-        badge = "Popular",
-        description = "One-time purchase for full access to all exclusive holiday card designs.",
+    val PRO_MONTHLY = PricingTier(
+        id = "holiday_wishes_monthly",
+        title = "Holiday Pro Monthly",
+        priceDisplay = "$9.99 / mo",
+        priceNumeric = 9.99,
+        badge = "300 Credits Included",
+        description = "300 AI Credits included, full access to 1,000+ Pro cards & wishes, watermarks removed & ad-free.",
         features = listOf(
-            "Unlock all 10+ Pro Christmas & New Year templates",
+            "🪙 300 AI Credits included each month",
+            "Unlock 1,000+ Pro Christmas, New Year & Season cards",
+            "Unlock 1,000+ Pro Wishes across all categories",
+            "Remove all watermarks on cards & wishes",
+            "Full HD Card Download to Device Gallery",
             "Ad-Free experience across the entire app",
-            "High-resolution card export for print & stories",
-            "Lifetime access with zero recurring subscriptions"
+            "Cancel anytime in Google Play Store"
         )
     )
 
-    val ULTIMATE_VIP = PricingTier(
-        id = "holiday_wishes_vip_10",
-        title = "Ultimate VIP Pass",
-        priceDisplay = "$9.99",
-        priceNumeric = 9.99,
-        badge = "Best Value",
-        description = "The complete holiday package for families, creators & holiday cheer.",
+    val PRO_YEARLY = PricingTier(
+        id = "holiday_wishes_yearly",
+        title = "Holiday Pro Yearly",
+        priceDisplay = "$79.00 / yr",
+        priceNumeric = 79.00,
+        badge = "⭐ SAVE 34% • UNLIMITED",
+        description = "Best value! Just $6.58/mo billed annually. UNLIMITED AI Credits for the whole year!",
         features = listOf(
-            "Everything in Holiday Wishes Pro ($5 tier)",
-            "Unlimited AI Holiday Wish Generations (No daily limits)",
-            "Exclusive VIP Gold Foil & Champagne card effects",
-            "Access to all 10 festive sticker stamps & custom badges",
-            "VIP Gold Crown badge on your saved cards",
-            "Priority support & all future 2027 holiday updates"
+            "✨ UNLIMITED AI Credits for 1 full year",
+            "Save 34% compared to monthly payments ($6.58/mo)",
+            "Unlock all 1,000+ Pro Cards (500+ Season, Christmas & New Year)",
+            "Unlock all 1,000+ Pro Wishes",
+            "Remove all watermarks on cards & wishes",
+            "Full HD Card Download & Auto-Schedule delivery",
+            "Exclusive VIP Gold Foil effects & custom badges",
+            "Ad-Free for the full year"
         )
     )
+
+    // Compatibility aliases
+    val PRO_LIFETIME = PRO_MONTHLY
+    val ULTIMATE_VIP = PRO_YEARLY
 }
 
 class MonetizationManager(context: Context) {
@@ -61,41 +70,82 @@ class MonetizationManager(context: Context) {
     private val _isVipUser = MutableStateFlow(prefs.getBoolean(KEY_IS_VIP, false))
     val isVipUser: StateFlow<Boolean> = _isVipUser.asStateFlow()
 
-    private val _unlockedCardIds = MutableStateFlow(
-        prefs.getStringSet(KEY_UNLOCKED_CARDS, emptySet())?.toSet() ?: emptySet()
-    )
+    private fun getTodayDateString(): String {
+        val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+        return sdf.format(java.util.Date())
+    }
+
+    private fun loadTodayUnlockedCards(): Set<String> {
+        val today = getTodayDateString()
+        val rawSet = prefs.getStringSet(KEY_DAILY_UNLOCKED_CARDS, emptySet()) ?: emptySet()
+        return rawSet.mapNotNull { entry ->
+            val parts = entry.split(":")
+            if (parts.size >= 2 && parts[1] == today) parts[0] else null
+        }.toSet()
+    }
+
+    private fun loadTodayUnlockedWishes(): Set<String> {
+        val today = getTodayDateString()
+        val rawSet = prefs.getStringSet(KEY_DAILY_UNLOCKED_WISHES, emptySet()) ?: emptySet()
+        return rawSet.mapNotNull { entry ->
+            val parts = entry.split(":")
+            if (parts.size >= 2 && parts[1] == today) parts[0] else null
+        }.toSet()
+    }
+
+    private val _unlockedCardIds = MutableStateFlow(loadTodayUnlockedCards())
     val unlockedCardIds: StateFlow<Set<String>> = _unlockedCardIds.asStateFlow()
 
-    private val _unlockedWishIds = MutableStateFlow(
-        prefs.getStringSet(KEY_UNLOCKED_WISHES, emptySet())?.toSet() ?: emptySet()
-    )
+    private val _unlockedWishIds = MutableStateFlow(loadTodayUnlockedWishes())
     val unlockedWishIds: StateFlow<Set<String>> = _unlockedWishIds.asStateFlow()
 
     private val _rewardedAdWatches = MutableStateFlow(prefs.getInt(KEY_REWARDED_WATCHES, 0))
     val rewardedAdWatches: StateFlow<Int> = _rewardedAdWatches.asStateFlow()
 
+    /**
+     * Checks if a card is unlocked.
+     * If unlocked via rewarded ad, it remains unlocked only for the current day.
+     * When the day ends, it automatically locks again!
+     */
     fun isCardUnlocked(cardId: String, isTemplatePro: Boolean): Boolean {
         if (!isTemplatePro) return true
         if (_isProUser.value || _isVipUser.value || com.example.data.subscription.SubscriptionManager.isPro.value) return true
-        return _unlockedCardIds.value.contains(cardId)
-    }
-
-    fun isWishUnlocked(wishId: String, isProWish: Boolean): Boolean {
-        if (!isProWish) return true
-        if (_isProUser.value || _isVipUser.value || com.example.data.subscription.SubscriptionManager.isPro.value) return true
-        return _unlockedWishIds.value.contains(wishId)
+        val todayUnlocked = loadTodayUnlockedCards()
+        if (_unlockedCardIds.value != todayUnlocked) {
+            _unlockedCardIds.value = todayUnlocked
+        }
+        return todayUnlocked.contains(cardId)
     }
 
     /**
-     * Unlocks a single Pro wish after the user watches a rewarded ad or confirms unlock.
+     * Checks if a wish is unlocked.
+     * If unlocked via rewarded ad, it remains unlocked only for the current day.
+     * When the day ends, it automatically locks again!
+     */
+    fun isWishUnlocked(wishId: String, isProWish: Boolean): Boolean {
+        if (!isProWish) return true
+        if (_isProUser.value || _isVipUser.value || com.example.data.subscription.SubscriptionManager.isPro.value) return true
+        val todayUnlocked = loadTodayUnlockedWishes()
+        if (_unlockedWishIds.value != todayUnlocked) {
+            _unlockedWishIds.value = todayUnlocked
+        }
+        return todayUnlocked.contains(wishId)
+    }
+
+    /**
+     * Unlocks a single Pro wish after the user watches a rewarded ad.
+     * The unlock is tied to today's date so it automatically locks again when the day ends!
      */
     fun unlockWishViaRewardedAd(wishId: String) {
-        val currentSet = _unlockedWishIds.value.toMutableSet()
+        val today = getTodayDateString()
+        val currentSet = loadTodayUnlockedWishes().toMutableSet()
         currentSet.add(wishId)
         val newWatches = _rewardedAdWatches.value + 1
 
+        val serializedSet = currentSet.map { "$it:$today" }.toSet()
+
         prefs.edit().apply {
-            putStringSet(KEY_UNLOCKED_WISHES, currentSet)
+            putStringSet(KEY_DAILY_UNLOCKED_WISHES, serializedSet)
             putInt(KEY_REWARDED_WATCHES, newWatches)
             apply()
         }
@@ -121,19 +171,24 @@ class MonetizationManager(context: Context) {
         if (isVip) {
             _isVipUser.value = true
         }
+        com.example.data.subscription.SubscriptionManager.setProDirect(true)
         return true
     }
 
     /**
-     * Unlocks a single Pro template after the user watches a 15-30s rewarded video ad.
+     * Unlocks a single Pro template after the user watches a rewarded video ad.
+     * The unlock is tied to today's date so it automatically locks again when the day ends!
      */
     fun unlockCardViaRewardedAd(cardId: String) {
-        val currentSet = _unlockedCardIds.value.toMutableSet()
+        val today = getTodayDateString()
+        val currentSet = loadTodayUnlockedCards().toMutableSet()
         currentSet.add(cardId)
         val newWatches = _rewardedAdWatches.value + 1
 
+        val serializedSet = currentSet.map { "$it:$today" }.toSet()
+
         prefs.edit().apply {
-            putStringSet(KEY_UNLOCKED_CARDS, currentSet)
+            putStringSet(KEY_DAILY_UNLOCKED_CARDS, serializedSet)
             putInt(KEY_REWARDED_WATCHES, newWatches)
             apply()
         }
@@ -162,6 +217,7 @@ class MonetizationManager(context: Context) {
         _isProUser.value = false
         _isVipUser.value = false
         _unlockedCardIds.value = emptySet()
+        _unlockedWishIds.value = emptySet()
         _rewardedAdWatches.value = 0
     }
 
@@ -169,8 +225,8 @@ class MonetizationManager(context: Context) {
         private const val PREFS_NAME = "holiday_wishes_monetization_prefs"
         private const val KEY_IS_PRO = "key_is_pro_user"
         private const val KEY_IS_VIP = "key_is_vip_user"
-        private const val KEY_UNLOCKED_CARDS = "key_unlocked_cards"
-        private const val KEY_UNLOCKED_WISHES = "key_unlocked_wishes"
+        private const val KEY_DAILY_UNLOCKED_CARDS = "key_daily_unlocked_cards"
+        private const val KEY_DAILY_UNLOCKED_WISHES = "key_daily_unlocked_wishes"
         private const val KEY_REWARDED_WATCHES = "key_rewarded_watches"
 
         @Volatile

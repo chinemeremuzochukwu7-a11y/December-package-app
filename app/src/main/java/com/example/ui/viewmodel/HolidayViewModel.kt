@@ -357,6 +357,29 @@ class HolidayViewModel(application: Application) : AndroidViewModel(application)
                 createdAt = System.currentTimeMillis()
             )
             cardRepository.saveCard(newCard)
+            val user = com.google.firebase.Firebase.auth.currentUser
+            if (user != null) {
+                try {
+                    com.example.data.firebase.FirestoreCardsRepository(getApplication()).saveCard(
+                        userId = user.uid,
+                        card = com.example.model.CustomCardData(
+                            templateId = template.id,
+                            title = template.title,
+                            recipientName = _cardRecipientName.value,
+                            message = _cardCustomMessage.value,
+                            senderName = _cardSenderName.value,
+                            primaryColorHex = template.primaryColorHex,
+                            secondaryColorHex = template.secondaryColorHex,
+                            accentColorHex = template.accentColorHex,
+                            decorationStyle = template.decorationStyle,
+                            textSizeSp = _cardTextSizeSp.value,
+                            textAlign = _cardTextAlign.value,
+                            showRecipient = _showRecipient.value,
+                            showSender = _showSender.value
+                        )
+                    )
+                } catch (_: Exception) {}
+            }
             onSuccess()
         }
     }
@@ -364,6 +387,12 @@ class HolidayViewModel(application: Application) : AndroidViewModel(application)
     fun deleteSavedCard(id: String) {
         viewModelScope.launch {
             cardRepository.deleteCard(id)
+            val user = com.google.firebase.Firebase.auth.currentUser
+            if (user != null) {
+                try {
+                    com.example.data.firebase.FirestoreCardsRepository(getApplication()).deleteCard(user.uid, id)
+                } catch (_: Exception) {}
+            }
         }
     }
 

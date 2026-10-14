@@ -1172,7 +1172,7 @@ object WishesRepository {
             occasion = "Celebration",
             isPopular = false
         )
-    ) + ProWishesData.proWishes
+    ) + ProWishesData.proWishes + ExpandedWishesData.expandedWishes
 
     fun getAllWishes(): List<Wish> = wishesList
 

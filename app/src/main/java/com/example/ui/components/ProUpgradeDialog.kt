@@ -161,55 +161,58 @@ fun ProUpgradeDialog(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Tier 1: $4.99 (Holiday Wishes Pro)
-                val proTier = PricingTiers.PRO_LIFETIME
+                // Plan 1: Monthly ($9.99/mo)
+                val monthlyTier = PricingTiers.PRO_MONTHLY
                 TierSelectionCard(
-                    tierTitle = proTier.title,
-                    price = proTier.priceDisplay,
-                    period = "One-time Lifetime",
-                    badge = proTier.badge,
+                    tierTitle = monthlyTier.title,
+                    price = monthlyTier.priceDisplay,
+                    period = "Billed Monthly • Cancel Anytime",
+                    badge = monthlyTier.badge,
                     badgeColor = HolidayPineGreen,
-                    isSelected = selectedTierId == proTier.id,
-                    onClick = { selectedTierId = proTier.id },
+                    isSelected = selectedTierId == monthlyTier.id,
+                    onClick = { selectedTierId = monthlyTier.id },
                     features = listOf(
-                        "All 8+ exclusive Pro Christmas & New Year cards",
-                        "100% Ad-Free experience",
-                        "High-resolution card export"
+                        "🪙 300 AI Credits included each month",
+                        "Unlock 1,000+ Pro Season, Xmas & New Year cards",
+                        "Unlock 1,000+ Pro Wishes across all categories",
+                        "Remove all watermarks on cards & wishes",
+                        "100% Ad-Free Experience Across App"
                     ),
-                    modifier = Modifier.testTag("tier_pro_5")
+                    modifier = Modifier.testTag("tier_monthly_999")
                 )
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                // Tier 2: $9.99 (Ultimate VIP Pass)
-                val vipTier = PricingTiers.ULTIMATE_VIP
+                // Plan 2: Yearly ($79.00/yr)
+                val yearlyTier = PricingTiers.PRO_YEARLY
                 TierSelectionCard(
-                    tierTitle = vipTier.title,
-                    price = vipTier.priceDisplay,
-                    period = "One-time Lifetime",
-                    badge = "⭐ BEST VALUE",
+                    tierTitle = yearlyTier.title,
+                    price = yearlyTier.priceDisplay,
+                    period = "Billed Annually ($6.58/mo)",
+                    badge = "⭐ SAVE 34% • UNLIMITED",
                     badgeColor = HolidayGold,
-                    isSelected = selectedTierId == vipTier.id,
-                    onClick = { selectedTierId = vipTier.id },
+                    isSelected = selectedTierId == yearlyTier.id,
+                    onClick = { selectedTierId = yearlyTier.id },
                     features = listOf(
-                        "Everything in Holiday Wishes Pro ($5)",
-                        "Unlimited AI Holiday Wish Generations",
-                        "Exclusive VIP Gold Foil stamps & stickers",
-                        "VIP Crown badge on customized cards"
+                        "✨ UNLIMITED AI Credits for 1 full year",
+                        "Save 34% compared to monthly billing",
+                        "Unlock all 1,000+ Pro Cards & Wishes",
+                        "Full HD Card Download & WhatsApp Auto-Schedule"
                     ),
-                    modifier = Modifier.testTag("tier_vip_10")
+                    modifier = Modifier.testTag("tier_yearly_79")
                 )
 
                 Spacer(modifier = Modifier.height(18.dp))
 
                 // Primary Action Button (Purchases via Google Play Billing)
+                val isYearlySelected = selectedTierId == yearlyTier.id
                 Button(
                     onClick = {
                         onPurchaseTier(selectedTierId)
                         onDismiss()
                     },
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = if (selectedTierId == vipTier.id) HolidayGold else HolidayCrimson
+                        containerColor = if (isYearlySelected) HolidayGold else HolidayCrimson
                     ),
                     shape = RoundedCornerShape(14.dp),
                     modifier = Modifier
@@ -220,16 +223,16 @@ fun ProUpgradeDialog(
                     Icon(
                         imageVector = Icons.Default.AutoAwesome,
                         contentDescription = null,
-                        tint = if (selectedTierId == vipTier.id) Color(0xFF332000) else Color.White
+                        tint = if (isYearlySelected) Color(0xFF332000) else Color.White
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = if (selectedTierId == vipTier.id)
-                            "Unlock Ultimate VIP Pass (${vipTier.priceDisplay})"
+                        text = if (isYearlySelected)
+                            "Subscribe Yearly ($79.00/yr • Save 34%)"
                         else
-                            "Get Holiday Wishes Pro (${proTier.priceDisplay})",
+                            "Subscribe Monthly ($9.99/mo)",
                         fontWeight = FontWeight.Bold,
-                        color = if (selectedTierId == vipTier.id) Color(0xFF332000) else Color.White,
+                        color = if (isYearlySelected) Color(0xFF332000) else Color.White,
                         fontSize = 15.sp
                     )
                 }
@@ -319,7 +322,7 @@ private fun TierSelectionCard(
             .clickable(onClick = onClick)
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
-            // Header Row: Selection + Title + Badge + Prominent Price
+            // Header Row: Selection + Title + Price
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -355,23 +358,6 @@ private fun TierSelectionCard(
                         fontWeight = FontWeight.Bold,
                         maxLines = 1
                     )
-
-                    if (badge != null) {
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Surface(
-                            shape = RoundedCornerShape(6.dp),
-                            color = badgeColor.copy(alpha = 0.2f),
-                            border = BorderStroke(1.dp, badgeColor.copy(alpha = 0.5f))
-                        ) {
-                            Text(
-                                text = badge,
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = badgeColor,
-                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
-                            )
-                        }
-                    }
                 }
 
                 // Price prominent on the right, guaranteed visible
@@ -393,11 +379,28 @@ private fun TierSelectionCard(
                 }
             }
 
+            if (badge != null) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = badgeColor.copy(alpha = 0.2f),
+                    border = BorderStroke(1.dp, badgeColor.copy(alpha = 0.6f))
+                ) {
+                    Text(
+                        text = badge,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = badgeColor,
+                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.5.dp)
+                    )
+                }
+            }
+
             Spacer(modifier = Modifier.height(8.dp))
 
             // Features list below header (full width)
             Column(modifier = Modifier.fillMaxWidth()) {
-                features.take(2).forEach { feature ->
+                features.take(3).forEach { feature ->
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.padding(vertical = 1.5.dp)

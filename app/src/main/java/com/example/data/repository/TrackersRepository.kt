@@ -14,7 +14,24 @@ class TrackersRepository(context: Context) {
     private val expenseDao = db.expenseDao()
     private val mealDao = db.mealDao()
     private val alarmDao = db.alarmDao()
+    private val scheduledGreetingDao = db.scheduledGreetingDao()
     private val alarmScheduler = com.example.utils.AlarmScheduler(context)
+    private val scheduledGreetingScheduler = com.example.utils.ScheduledGreetingScheduler(context)
+
+    // --- Scheduled Greetings (Automated delivery for WhatsApp & Media) ---
+    fun getAllScheduledGreetings(): Flow<List<com.example.data.local.ScheduledGreetingEntity>> =
+        scheduledGreetingDao.getAllScheduledGreetings()
+
+    suspend fun saveScheduledGreeting(greeting: com.example.data.local.ScheduledGreetingEntity): Long {
+        val id = scheduledGreetingDao.insertGreeting(greeting)
+        scheduledGreetingScheduler.schedule(greeting.copy(id = id))
+        return id
+    }
+
+    suspend fun deleteScheduledGreeting(id: Long) {
+        scheduledGreetingScheduler.cancel(id)
+        scheduledGreetingDao.deleteById(id)
+    }
 
     // --- Alarms & Reminders ---
     fun getAllAlarms(): Flow<List<com.example.data.local.AlarmEntity>> = alarmDao.getAllAlarms()
@@ -63,7 +80,22 @@ class TrackersRepository(context: Context) {
     // --- Birthdays ---
     fun getAllBirthdays(): Flow<List<BirthdayEntity>> = birthdayDao.getAllBirthdays()
 
-    suspend fun saveBirthday(birthday: BirthdayEntity): Long = birthdayDao.insertBirthday(birthday)
+    suspend fun saveBirthday(birthday: BirthdayEntity): Long {
+        val id = birthdayDao.insertBirthday(birthday)
+        val user = com.google.firebase.Firebase.auth.currentUser
+        if (user != null) {
+            try {
+                com.example.data.firebase.FirestoreTrackersRepository(context).saveBirthday(
+                    userId = user.uid,
+                    name = birthday.name,
+                    birthDate = birthday.birthDate,
+                    relationship = birthday.relationship,
+                    notes = birthday.notes
+                )
+            } catch (_: Exception) {}
+        }
+        return id
+    }
 
     suspend fun updateBirthday(birthday: BirthdayEntity) = birthdayDao.updateBirthday(birthday)
 
@@ -76,7 +108,22 @@ class TrackersRepository(context: Context) {
 
     fun getTotalSpent(): Flow<Double?> = expenseDao.getTotalSpent()
 
-    suspend fun saveExpense(expense: ExpenseEntity): Long = expenseDao.insertExpense(expense)
+    suspend fun saveExpense(expense: ExpenseEntity): Long {
+        val id = expenseDao.insertExpense(expense)
+        val user = com.google.firebase.Firebase.auth.currentUser
+        if (user != null) {
+            try {
+                com.example.data.firebase.FirestoreTrackersRepository(context).saveExpense(
+                    userId = user.uid,
+                    title = expense.title,
+                    amount = expense.amount,
+                    category = expense.category,
+                    date = expense.date
+                )
+            } catch (_: Exception) {}
+        }
+        return id
+    }
 
     suspend fun updateExpense(expense: ExpenseEntity) = expenseDao.updateExpense(expense)
 
@@ -87,7 +134,22 @@ class TrackersRepository(context: Context) {
 
     fun getTotalCaloriesForDate(dateString: String): Flow<Int?> = mealDao.getTotalCaloriesForDate(dateString)
 
-    suspend fun saveMeal(meal: MealEntity): Long = mealDao.insertMeal(meal)
+    suspend fun saveMeal(meal: MealEntity): Long {
+        val id = mealDao.insertMeal(meal)
+        val user = com.google.firebase.Firebase.auth.currentUser
+        if (user != null) {
+            try {
+                com.example.data.firebase.FirestoreTrackersRepository(context).saveMeal(
+                    userId = user.uid,
+                    mealType = meal.mealType,
+                    title = meal.title,
+                    recipe = meal.recipe,
+                    date = meal.date
+                )
+            } catch (_: Exception) {}
+        }
+        return id
+    }
 
     suspend fun updateMeal(meal: MealEntity) = mealDao.updateMeal(meal)
 

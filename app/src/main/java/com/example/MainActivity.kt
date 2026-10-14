@@ -26,6 +26,11 @@ import com.example.ui.navigation.HolidayNavHost
 import com.example.ui.navigation.Screen
 import com.example.ui.theme.HolidayWishesTheme
 import com.example.ui.viewmodel.HolidayViewModel
+import androidx.compose.runtime.LaunchedEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.data.firebase.FirestoreManager
+import com.example.data.firebase.UserFirestoreRepository
+import com.example.ui.auth.AuthScreen
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -34,7 +39,15 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             HolidayWishesTheme {
-                HolidayWishesApp()
+                val auth = FirestoreManager.auth
+                val currentUser by FirestoreManager.authStateFlow().collectAsStateWithLifecycle(initialValue = auth.currentUser)
+                val user = currentUser
+
+                if (user == null) {
+                    AuthScreen(onSignInSuccess = { /* auto-updates via authStateFlow */ })
+                } else {
+                    HolidayWishesApp(currentUserId = user.uid)
+                }
             }
         }
     }
@@ -42,8 +55,22 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun HolidayWishesApp(
+    currentUserId: String = "",
     viewModel: HolidayViewModel = viewModel()
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    // Synchronize user profile & initial 25 credits with Firestore on login
+    LaunchedEffect(currentUserId) {
+        if (currentUserId.isNotBlank()) {
+            val user = FirestoreManager.currentUser
+            if (user != null) {
+                val repo = UserFirestoreRepository(context)
+                repo.ensureUserInitialized(user)
+                repo.observeUserProfile(user.uid).collect { /* updates SubscriptionManager */ }
+            }
+        }
+    }
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route ?: Screen.Home.route

@@ -262,9 +262,11 @@ object CardTemplatesRepository {
             decorationStyle = CardDecorationStyle.STARS,
             isPro = true
         )
-    ) + ProCardTemplatesData.proTemplates
+    ) + ProCardTemplatesData.proTemplates + SeasonCardTemplatesData.seasonTemplates + ExpandedCardsData.expandedCards
 
     fun getAllTemplates(): List<CardTemplate> = templates
+
+    fun getSeasonTemplates(): List<CardTemplate> = templates.filter { it.occasion == CardOccasion.HOLIDAY_SEASON }
 
     fun getChristmasTemplates(): List<CardTemplate> = templates.filter { it.occasion == CardOccasion.CHRISTMAS }
 

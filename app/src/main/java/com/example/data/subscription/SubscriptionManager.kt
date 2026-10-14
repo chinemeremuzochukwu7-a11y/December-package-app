@@ -23,6 +23,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.example.R
+import com.google.firebase.Firebase
+import com.google.firebase.auth.auth
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.FieldValue
 
 /**
  * Holiday Wishes Premium Plan description
@@ -54,75 +59,56 @@ object SubscriptionManager : PurchasesUpdatedListener {
     private const val KEY_CREDITS = "key_credits"
     private const val KEY_ACTIVE_TIER = "key_active_tier"
 
+    // Google Play Console Exact Subscription Product IDs
+    const val PRODUCT_MONTHLY = "holiday_wishes_monthly"
+    const val PRODUCT_YEARLY = "holiday_wishes_yearly"
+
     // Backward-compatibility constants
     const val ENTITLEMENT_HOLIDAY_WISHES_PRO = "holiday_wishes_pro"
-    const val PRODUCT_YEARLY = "yearly"
-    const val PRODUCT_MONTHLY = "monthly"
 
-    // Google Play Product IDs
-    const val TIER_5_MONTHLY = "holiday_starter_5"
-    const val TIER_5_YEARLY = "holiday_starter_5_yearly"
-    const val TIER_15_MONTHLY = "holiday_pro_15"
-    const val TIER_15_YEARLY = "holiday_pro_15_yearly"
-    const val TIER_45_MONTHLY = "holiday_ultimate_45"
-    const val TIER_45_YEARLY = "holiday_ultimate_45_yearly"
-
-    val AVAILABLE_PLANS = listOf(
-        BillingPlan(
-            id = TIER_5_MONTHLY,
-            yearlyId = TIER_5_YEARLY,
-            title = "Starter Festive",
-            monthlyPrice = "$5.00 / month",
-            yearlyPrice = "$48.00 / year ($4.00/mo)",
-            monthlyCredits = 50,
-            yearlyCredits = 150,
-            features = listOf(
-                "50 AI Holiday Wish Credits",
-                "Export Custom Greeting Cards",
-                "Watermark Removal on Cards",
-                "Save Unlimited Saved Wishes"
-            ),
-            isRecommended = true,
-            yearlyBonusText = "20% Discount + 100 Bonus Credits + Exclusive Christmas Card Frame"
+    val PLAN_MONTHLY = BillingPlan(
+        id = PRODUCT_MONTHLY,
+        yearlyId = PRODUCT_YEARLY,
+        title = "Holiday Pro Monthly",
+        monthlyPrice = "$9.99 / month",
+        yearlyPrice = "$79.00 / year ($6.58/mo)",
+        monthlyCredits = 300,
+        yearlyCredits = 999999,
+        features = listOf(
+            "🪙 300 AI Credits included each month",
+            "Unlock all 1,000+ Pro Christmas, New Year & Season cards",
+            "Unlock all 1,000+ Pro Wishes across all categories",
+            "Remove all watermarks on cards & wishes",
+            "Full HD Card Download to Device Gallery",
+            "No Ads Experience Across App"
         ),
-        BillingPlan(
-            id = TIER_15_MONTHLY,
-            yearlyId = TIER_15_YEARLY,
-            title = "Pro Celebrator",
-            monthlyPrice = "$15.00 / month",
-            yearlyPrice = "$144.00 / year ($12.00/mo)",
-            monthlyCredits = 200,
-            yearlyCredits = 500,
-            features = listOf(
-                "200 AI Holiday Wish Credits",
-                "All Premium Card Layouts & Fonts",
-                "Full Holiday Expense Tracker Analytics",
-                "Seasonal Ringtone & Sound Themes",
-                "No Ads Experience"
-            ),
-            isRecommended = false,
-            yearlyBonusText = "20% Discount + 300 Bonus Credits + Priority AI Generator"
-        ),
-        BillingPlan(
-            id = TIER_45_MONTHLY,
-            yearlyId = TIER_45_YEARLY,
-            title = "Ultimate VIP",
-            monthlyPrice = "$45.00 / month",
-            yearlyPrice = "$432.00 / year ($36.00/mo)",
-            monthlyCredits = 1000,
-            yearlyCredits = 3000,
-            features = listOf(
-                "Unlimited AI Holiday Wishes",
-                "Priority Gemini Pro AI engine",
-                "Full Meal, Gift & Budget Planner Sync",
-                "All Present & Future Holiday Themes",
-                "VIP 24/7 Holiday Support",
-                "Ad-Free Lifetime Badge"
-            ),
-            isRecommended = false,
-            yearlyBonusText = "25% Discount + Unlimited Credits + Lifetime Holiday Gift Planner Access"
-        )
+        isRecommended = false,
+        yearlyBonusText = "Billed monthly at $9.99/mo with 300 credits included. Cancel anytime."
     )
+
+    val PLAN_YEARLY = BillingPlan(
+        id = PRODUCT_YEARLY,
+        yearlyId = PRODUCT_YEARLY,
+        title = "Holiday Pro Yearly",
+        monthlyPrice = "$9.99 / month",
+        yearlyPrice = "$79.00 / year ($6.58/mo)",
+        monthlyCredits = 300,
+        yearlyCredits = 999999,
+        features = listOf(
+            "✨ UNLIMITED AI Credits for 1 full year",
+            "Save 34% over monthly billing ($6.58/mo)",
+            "Unlock all 1,000+ Pro Cards (500+ Season, Christmas & New Year)",
+            "Unlock all 1,000+ Pro Wishes",
+            "Remove all watermarks on cards & wishes",
+            "Full HD Card Download & Auto-Schedule delivery",
+            "VIP Gold Crown & Luxury Themes",
+            "Ad-Free for the full year"
+        ),
+        isRecommended = true,
+        yearlyBonusText = "BEST VALUE: Save 34%! Only $6.58/mo billed annually ($79/yr) • UNLIMITED CREDITS."
+    )
+
+    val AVAILABLE_PLANS = listOf(PLAN_MONTHLY, PLAN_YEARLY)
 
     private val scope = CoroutineScope(Dispatchers.IO)
     private var billingClient: BillingClient? = null
@@ -269,17 +255,51 @@ object SubscriptionManager : PurchasesUpdatedListener {
     }
 
     /**
+     * Purchases directly by product ID ("holiday_wishes_monthly" or "holiday_wishes_yearly")
+     */
+    fun purchaseByProductId(
+        activity: Activity,
+        productId: String,
+        onSuccess: () -> Unit = {},
+        onError: (String) -> Unit = {}
+    ) {
+        val isYearly = productId == PRODUCT_YEARLY
+        val plan = if (isYearly) PLAN_YEARLY else PLAN_MONTHLY
+        purchase(activity, plan, isYearly, onSuccess, onError)
+    }
+
+    fun setProDirect(isPro: Boolean) {
+        _isPro.value = isPro
+        prefs?.edit()?.putBoolean(KEY_IS_PRO, isPro)?.apply()
+    }
+
+    fun isYearlySubscriber(): Boolean {
+        return prefs?.getBoolean("key_is_yearly", false) == true || _credits.value >= 99999
+    }
+
+    /**
      * Fallback simulated purchase for testing in sandbox/dev builds
      */
     private fun simulatePurchaseSuccess(plan: BillingPlan, isYearly: Boolean) {
-        val earnedCredits = if (isYearly) plan.yearlyCredits else plan.monthlyCredits
-        addCredits(earnedCredits)
         _isPro.value = true
-        _activeTier.value = "${plan.title} (${if (isYearly) "Annual" else "Monthly"})"
-        prefs?.edit()
-            ?.putBoolean(KEY_IS_PRO, true)
-            ?.putString(KEY_ACTIVE_TIER, _activeTier.value)
-            ?.apply()
+        if (isYearly) {
+            _credits.value = 999999
+            _activeTier.value = "Holiday Pro Yearly (Unlimited)"
+            prefs?.edit()
+                ?.putBoolean(KEY_IS_PRO, true)
+                ?.putBoolean("key_is_yearly", true)
+                ?.putInt(KEY_CREDITS, 999999)
+                ?.putString(KEY_ACTIVE_TIER, _activeTier.value)
+                ?.apply()
+        } else {
+            addCredits(300)
+            _activeTier.value = "Holiday Pro Monthly (300 Credits)"
+            prefs?.edit()
+                ?.putBoolean(KEY_IS_PRO, true)
+                ?.putBoolean("key_is_yearly", false)
+                ?.putString(KEY_ACTIVE_TIER, _activeTier.value)
+                ?.apply()
+        }
     }
 
     override fun onPurchasesUpdated(billingResult: BillingResult, purchases: List<Purchase>?) {
@@ -343,24 +363,51 @@ object SubscriptionManager : PurchasesUpdatedListener {
         }
     }
 
+    fun syncWithFirestore(firestoreCredits: Int, firestoreIsPro: Boolean) {
+        _credits.value = firestoreCredits
+        _isPro.value = firestoreIsPro
+        prefs?.edit()
+            ?.putInt(KEY_CREDITS, firestoreCredits)
+            ?.putBoolean(KEY_IS_PRO, firestoreIsPro)
+            ?.apply()
+    }
+
     fun addCredits(amount: Int) {
         val newTotal = _credits.value + amount
         _credits.value = newTotal
         prefs?.edit()?.putInt(KEY_CREDITS, newTotal)?.apply()
+        // Also sync to Firestore if user is signed in
+        val user = com.google.firebase.Firebase.auth.currentUser
+        if (user != null) {
+            val databaseId = prefs?.getString("firestore_db_id", null)
+            val db = if (databaseId != null) com.google.firebase.firestore.FirebaseFirestore.getInstance(databaseId)
+            else null
+            db?.collection("users")?.document(user.uid)
+                ?.update("credits", com.google.firebase.firestore.FieldValue.increment(amount.toLong()))
+        }
     }
 
     fun hasEnoughCredits(amount: Int): Boolean {
-        if (_isPro.value) return true
+        if (_isPro.value && isYearlySubscriber()) return true
         return _credits.value >= amount
     }
 
     fun useCredits(amount: Int): Boolean {
-        if (_isPro.value) return true // Upgraded users have unlimited access
+        if (_isPro.value && isYearlySubscriber()) return true // Yearly subscribers have unlimited credits
         val current = _credits.value
         if (current >= amount) {
             val newTotal = current - amount
             _credits.value = newTotal
             prefs?.edit()?.putInt(KEY_CREDITS, newTotal)?.apply()
+            // Also deduct from Firestore if user is signed in
+            val user = com.google.firebase.Firebase.auth.currentUser
+            if (user != null) {
+                val databaseId = prefs?.getString("firestore_db_id", null)
+                val db = if (databaseId != null) com.google.firebase.firestore.FirebaseFirestore.getInstance(databaseId)
+                else null
+                db?.collection("users")?.document(user.uid)
+                    ?.update("credits", com.google.firebase.firestore.FieldValue.increment(-amount.toLong()))
+            }
             return true
         }
         return false

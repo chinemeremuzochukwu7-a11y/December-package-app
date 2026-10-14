@@ -2,6 +2,7 @@ package com.example.ui.screens
 
 import android.app.Activity
 import android.text.format.DateUtils
+import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
@@ -33,6 +34,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
@@ -40,6 +42,7 @@ import androidx.compose.material.icons.filled.CardGiftcard
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.MonetizationOn
 import androidx.compose.material.icons.filled.PlayCircle
@@ -58,6 +61,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import com.example.ui.components.ScheduleGreetingDialog
+import com.example.ui.theme.HolidayPineGreen
+import com.example.utils.WishExporter
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
@@ -216,7 +222,9 @@ fun AiWishGeneratorScreen(
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
-                    text = if (isPro) "PRO Unlimited AI Wishes" else "10 Credits/Wish • Balance: $credits",
+                    text = if (isPro) {
+                        if (credits >= 99999) "PRO Unlimited AI Wishes (Yearly)" else "Pro Active • $credits Credits ($9.99/mo)"
+                    } else "10 Credits/Wish • Balance: $credits",
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface,
@@ -740,9 +748,76 @@ private fun GeneratedResultCard(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
-                // Action buttons row: Copy, Share, Save, Create Card, Generate Again
+                var showScheduleDialog by remember { mutableStateOf(false) }
+
+                if (showScheduleDialog) {
+                    ScheduleGreetingDialog(
+                        greetingTitle = "${result.occasion.displayName} AI Wish",
+                        initialRecipientName = result.recipientName,
+                        messageText = result.text,
+                        onDismiss = { showScheduleDialog = false },
+                        onScheduledSuccess = { timeStr ->
+                            Toast.makeText(
+                                context,
+                                "AI Wish scheduled for $timeStr! 🚀 You will receive a prompt to auto-send on WhatsApp when the time arrives.",
+                                Toast.LENGTH_LONG
+                            ).show()
+                        }
+                    )
+                }
+
+                // Primary Delivery Row: Download Wish to Device & Schedule Auto-Send
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // Download Wish Button
+                    Button(
+                        onClick = {
+                            val imageSaved = WishExporter.saveWishAsImageToGallery(
+                                context = context,
+                                wishText = result.text,
+                                occasionTitle = "${result.occasion.displayName} Wish",
+                                recipientName = result.recipientName
+                            )
+                            WishExporter.saveWishAsTextFileToDownloads(
+                                context = context,
+                                wishText = result.text,
+                                occasionTitle = "${result.occasion.displayName} Wish"
+                            )
+                            if (imageSaved) {
+                                Toast.makeText(context, "Wish downloaded to your device Gallery & Downloads! 📥✨", Toast.LENGTH_LONG).show()
+                            } else {
+                                Toast.makeText(context, "Saved to device! 📥", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = HolidayPineGreen),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.weight(1f).height(42.dp).testTag("ai_download_wish_button")
+                    ) {
+                        Icon(imageVector = Icons.Default.Download, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Download Wish", fontWeight = FontWeight.Bold, fontSize = 12.5.sp)
+                    }
+
+                    // Schedule Auto-Send Button
+                    OutlinedButton(
+                        onClick = { showScheduleDialog = true },
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.5.dp, HolidayCrimson),
+                        modifier = Modifier.weight(1f).height(42.dp).testTag("ai_schedule_wish_button")
+                    ) {
+                        Icon(imageVector = Icons.Default.AccessTime, contentDescription = null, tint = HolidayCrimson, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Schedule Send", color = HolidayCrimson, fontWeight = FontWeight.Bold, fontSize = 12.5.sp)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Action buttons row: Copy, Share, Save
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),

@@ -13,9 +13,10 @@ import androidx.room.RoomDatabase
         BirthdayEntity::class,
         ExpenseEntity::class,
         MealEntity::class,
-        AlarmEntity::class
+        AlarmEntity::class,
+        ScheduledGreetingEntity::class
     ],
-    version = 5,
+    version = 6,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -26,6 +27,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun expenseDao(): ExpenseDao
     abstract fun mealDao(): MealDao
     abstract fun alarmDao(): AlarmDao
+    abstract fun scheduledGreetingDao(): ScheduledGreetingDao
 
     companion object {
         @Volatile

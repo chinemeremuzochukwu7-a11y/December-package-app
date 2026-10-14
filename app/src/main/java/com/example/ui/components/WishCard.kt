@@ -291,7 +291,7 @@ fun WishCard(
                                         activity = activity,
                                         onRewardEarned = {
                                             monetizationManager.unlockWishViaRewardedAd(wish.id)
-                                            Toast.makeText(context, "🎉 Pro Wish Unlocked!", Toast.LENGTH_SHORT).show()
+                                            Toast.makeText(context, "🎉 Pro Wish Unlocked for Today! (Locks at midnight)", Toast.LENGTH_SHORT).show()
                                         },
                                         onDismiss = {}
                                     )
@@ -312,7 +312,7 @@ fun WishCard(
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text(
-                                    text = "Watch Ad to Unlock",
+                                    text = "Watch Ad (Today)",
                                     color = Color.White,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 11.sp,

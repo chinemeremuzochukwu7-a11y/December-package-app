@@ -79,7 +79,7 @@ sealed class Screen(
 
     object AlarmReminder : Screen(
         route = "alarm_reminder",
-        title = "Alarms & Reminders",
+        title = "Schedule",
         selectedIcon = Icons.Filled.Alarm,
         unselectedIcon = Icons.Outlined.Alarm
     )
@@ -93,7 +93,7 @@ sealed class Screen(
 
     object Cards : Screen(
         route = "cards",
-        title = "Cards",
+        title = "Templates",
         selectedIcon = Icons.Filled.CardGiftcard,
         unselectedIcon = Icons.Outlined.CardGiftcard
     )
@@ -141,11 +141,11 @@ sealed class Screen(
     )
 }
 
-// Bottom nav items: Home, AI Wishes, Birthdays, Expenses, Meals
+// Bottom nav items: Home, Templates (1000+), AI Wishes, Schedule, Birthdays
 val BottomNavItems = listOf(
     Screen.Home,
+    Screen.Cards,
     Screen.AiWishGenerator,
-    Screen.BirthdayTracker,
-    Screen.ExpensesTracker,
-    Screen.MealTracker
+    Screen.AlarmReminder,
+    Screen.BirthdayTracker
 )

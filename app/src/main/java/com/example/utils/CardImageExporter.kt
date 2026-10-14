@@ -12,6 +12,15 @@ import android.provider.MediaStore
 import android.view.View
 import android.widget.Toast
 import androidx.core.content.FileProvider
+import android.graphics.Paint
+import android.graphics.RectF
+import android.graphics.LinearGradient
+import android.graphics.Shader
+import android.graphics.Typeface
+import android.text.StaticLayout
+import android.text.TextPaint
+import android.text.Layout
+import com.example.model.CardTemplate
 import java.io.File
 import java.io.FileOutputStream
 import java.io.OutputStream
@@ -19,9 +28,194 @@ import java.io.OutputStream
 object CardImageExporter {
 
     /**
-     * Renders an Android View directly to a high-resolution Bitmap.
+     * Renders a pristine, high-resolution 1080x1520 Bitmap containing ONLY the specific card.
+     * Ensures zero device UI buttons, bars, or background elements are captured.
      */
-    fun viewToBitmap(view: View): Bitmap {
+    fun renderCardBitmap(
+        template: CardTemplate,
+        customTitle: String? = null,
+        recipientName: String = "",
+        customMessage: String? = null,
+        senderName: String = "",
+        fontStyle: String = "Classic",
+        isPro: Boolean = false
+    ): Bitmap {
+        val width = 1080
+        val height = 1520
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+
+        val primaryColor = (0xFF000000 or template.primaryColorHex).toInt()
+        val secondaryColor = (0xFF000000 or template.secondaryColorHex).toInt()
+        val accentColor = (0xFF000000 or template.accentColorHex).toInt()
+        val goldColor = 0xFFFFD700.toInt()
+
+        // 1. Draw gradient card background
+        val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            shader = LinearGradient(
+                0f, 0f, 0f, height.toFloat(),
+                intArrayOf(primaryColor, secondaryColor),
+                floatArrayOf(0.0f, 1.0f),
+                Shader.TileMode.CLAMP
+            )
+        }
+        val cardRect = RectF(0f, 0f, width.toFloat(), height.toFloat())
+        canvas.drawRoundRect(cardRect, 48f, 48f, bgPaint)
+
+        // 2. Draw luxury outer border & inner accent border
+        val outerBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = goldColor
+            style = Paint.Style.STROKE
+            strokeWidth = 10f
+        }
+        val innerBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = 0x88FFD700.toInt()
+            style = Paint.Style.STROKE
+            strokeWidth = 3f
+        }
+        canvas.drawRoundRect(RectF(28f, 28f, width - 28f, height - 28f), 36f, 36f, outerBorderPaint)
+        canvas.drawRoundRect(RectF(48f, 48f, width - 48f, height - 48f), 28f, 28f, innerBorderPaint)
+
+        // 3. Decorative top stars and sparkles
+        val decorPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = goldColor
+            textSize = 34f
+            textAlign = Paint.Align.CENTER
+        }
+        canvas.drawText("✦  ★  ✦  ★  ✦", width / 2f, 120f, decorPaint)
+
+        // 4. Subtitle
+        val subtitlePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = 0xCCFFFFFF.toInt()
+            textSize = 28f
+            letterSpacing = 0.25f
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            textAlign = Paint.Align.CENTER
+        }
+        canvas.drawText(template.subtitle.uppercase(), width / 2f, 175f, subtitlePaint)
+
+        // 5. Main Title
+        val titleText = customTitle?.takeIf { it.isNotBlank() } ?: template.title
+        val titlePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = 0xFFFFFFFF.toInt()
+            textSize = 62f
+            typeface = Typeface.create(Typeface.SERIF, Typeface.BOLD)
+            textAlign = Paint.Align.CENTER
+        }
+        canvas.drawText(titleText, width / 2f, 260f, titlePaint)
+
+        // Decorative divider under title
+        val dividerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = goldColor
+            strokeWidth = 4f
+        }
+        canvas.drawLine(width * 0.25f, 305f, width * 0.75f, 305f, dividerPaint)
+
+        var currentY = 380f
+
+        // 6. Recipient Greeting
+        if (recipientName.isNotBlank()) {
+            val toPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = goldColor
+                textSize = 38f
+                typeface = Typeface.create(Typeface.SERIF, Typeface.BOLD_ITALIC)
+                textAlign = Paint.Align.CENTER
+            }
+            canvas.drawText("Dearest $recipientName,", width / 2f, currentY, toPaint)
+            currentY += 75f
+        } else {
+            currentY += 20f
+        }
+
+        // 7. Message Body (StaticLayout for clean multi-line word wrapping)
+        val messageText = customMessage?.takeIf { it.isNotBlank() } ?: template.defaultMessage
+        val messagePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = 0xFFFFFFFF.toInt()
+            textSize = 36f
+            typeface = if (fontStyle == "Serif") Typeface.SERIF else Typeface.DEFAULT
+        }
+        val messageWidth = (width - 240).coerceAtLeast(400)
+        val messageLayout = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            StaticLayout.Builder.obtain(messageText, 0, messageText.length, messagePaint, messageWidth)
+                .setAlignment(Layout.Alignment.ALIGN_CENTER)
+                .setLineSpacing(16f, 1.15f)
+                .build()
+        } else {
+            @Suppress("DEPRECATION")
+            StaticLayout(
+                messageText,
+                messagePaint,
+                messageWidth,
+                Layout.Alignment.ALIGN_CENTER,
+                1.15f,
+                16f,
+                false
+            )
+        }
+
+        canvas.save()
+        canvas.translate(120f, currentY)
+        messageLayout.draw(canvas)
+        canvas.restore()
+
+        currentY += messageLayout.height + 80f
+
+        // 8. Sender Line
+        if (senderName.isNotBlank()) {
+            val senderPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = goldColor
+                textSize = 36f
+                typeface = Typeface.create(Typeface.SERIF, Typeface.BOLD_ITALIC)
+                textAlign = Paint.Align.CENTER
+            }
+            canvas.drawText("With love & warm wishes,", width / 2f, currentY, senderPaint)
+            currentY += 55f
+            val senderNamePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = 0xFFFFFFFF.toInt()
+                textSize = 42f
+                typeface = Typeface.create(Typeface.SERIF, Typeface.BOLD)
+                textAlign = Paint.Align.CENTER
+            }
+            canvas.drawText(senderName, width / 2f, currentY, senderNamePaint)
+        }
+
+        // 9. Bottom Festive Ornaments
+        val bottomDecorPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = goldColor
+            textSize = 32f
+            textAlign = Paint.Align.CENTER
+        }
+        canvas.drawText("🎄  ❄️  ✨  ❄️  🎄", width / 2f, height - 120f, bottomDecorPaint)
+
+        // 10. Watermark if free user
+        if (!isPro) {
+            val watermarkPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = 0xAAFFFFFF.toInt()
+                textSize = 22f
+                typeface = Typeface.DEFAULT
+                textAlign = Paint.Align.CENTER
+            }
+            canvas.drawText("✨ Created with Holiday Wishes 🎄", width / 2f, height - 70f, watermarkPaint)
+        }
+
+        return bitmap
+    }
+
+    /**
+     * Renders an Android View directly to a high-resolution Bitmap.
+     * If bounds are provided, renders only the specific card area.
+     */
+    fun viewToBitmap(view: View, bounds: androidx.compose.ui.geometry.Rect? = null): Bitmap {
+        if (bounds != null && bounds.width > 20 && bounds.height > 20) {
+            val width = bounds.width.toInt().coerceAtLeast(1)
+            val height = bounds.height.toInt().coerceAtLeast(1)
+            val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(bitmap)
+            canvas.translate(-bounds.left, -bounds.top)
+            view.draw(canvas)
+            return bitmap
+        }
+
         val width = if (view.width > 0) view.width else 1080
         val height = if (view.height > 0) view.height else 1440
 

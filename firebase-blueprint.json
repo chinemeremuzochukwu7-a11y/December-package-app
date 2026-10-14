@@ -1,0 +1,102 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile with persistent credits and subscription status",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "The Firebase Auth UID" },
+        "email": { "type": "string", "description": "User email address" },
+        "displayName": { "type": "string", "description": "Display name of the user" },
+        "credits": { "type": "number", "description": "Available credits / tokens balance, starts at 25 for new users" },
+        "isPro": { "type": "boolean", "description": "Whether the user has active Pro access" },
+        "createdAt": { "type": "string", "description": "Account registration timestamp" },
+        "updatedAt": { "type": "string", "description": "Last update timestamp" }
+      },
+      "required": ["userId", "credits", "isPro"]
+    },
+    "SavedCard": {
+      "title": "SavedCard",
+      "description": "Custom holiday card created by the user",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Card unique identifier" },
+        "userId": { "type": "string", "description": "Owner user UID" },
+        "templateId": { "type": "string", "description": "Source template identifier" },
+        "title": { "type": "string", "description": "Card title" },
+        "recipientName": { "type": "string", "description": "Card recipient name" },
+        "message": { "type": "string", "description": "Personalized greeting message" },
+        "senderName": { "type": "string", "description": "Sender name" },
+        "createdAt": { "type": "string", "description": "Creation timestamp" }
+      },
+      "required": ["id", "userId", "templateId", "title", "message"]
+    },
+    "BirthdayItem": {
+      "title": "BirthdayItem",
+      "description": "Birthday entry tracked by user",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier" },
+        "userId": { "type": "string", "description": "Owner user UID" },
+        "name": { "type": "string", "description": "Person name" },
+        "birthDate": { "type": "string", "description": "Birth date string YYYY-MM-DD" },
+        "relationship": { "type": "string", "description": "Relationship" },
+        "notes": { "type": "string", "description": "Additional notes" },
+        "createdAt": { "type": "string", "description": "Creation timestamp" }
+      },
+      "required": ["id", "userId", "name", "birthDate"]
+    },
+    "ExpenseItem": {
+      "title": "ExpenseItem",
+      "description": "Tracked holiday expense or budget entry",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier" },
+        "userId": { "type": "string", "description": "Owner user UID" },
+        "title": { "type": "string", "description": "Expense title or item" },
+        "amount": { "type": "number", "description": "Expense amount in USD" },
+        "category": { "type": "string", "description": "Category: Gifts, Food, Travel, etc" },
+        "date": { "type": "string", "description": "Date of expense" },
+        "createdAt": { "type": "string", "description": "Creation timestamp" }
+      },
+      "required": ["id", "userId", "title", "amount"]
+    },
+    "MealItem": {
+      "title": "MealItem",
+      "description": "Daily holiday feast or meal plan",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier" },
+        "userId": { "type": "string", "description": "Owner user UID" },
+        "mealType": { "type": "string", "description": "Breakfast, Lunch, Dinner, Dessert" },
+        "title": { "type": "string", "description": "Dish title" },
+        "recipe": { "type": "string", "description": "Recipe or notes" },
+        "date": { "type": "string", "description": "Date of meal" },
+        "createdAt": { "type": "string", "description": "Creation timestamp" }
+      },
+      "required": ["id", "userId", "mealType", "title"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile with persistent credits and subscription status"
+    },
+    "/users/{userId}/saved_cards/{cardId}": {
+      "schema": "SavedCard",
+      "description": "Cards created and saved by the user"
+    },
+    "/users/{userId}/birthdays/{birthdayId}": {
+      "schema": "BirthdayItem",
+      "description": "Birthdays tracked by the user"
+    },
+    "/users/{userId}/expenses/{expenseId}": {
+      "schema": "ExpenseItem",
+      "description": "Holiday expenses and budget records"
+    },
+    "/users/{userId}/meals/{mealId}": {
+      "schema": "MealItem",
+      "description": "Feast and meal plans"
+    }
+  }
+}

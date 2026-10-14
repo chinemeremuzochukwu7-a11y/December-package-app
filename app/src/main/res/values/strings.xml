@@ -1,9 +1,8 @@
 <resources>
     <string name="app_name">Holiday Wishes</string>
-    <!-- Firebase configuration fallback strings -->
-    <string name="google_app_id" translatable="false">1:123456789012:android:abcdef0123456789abcdef</string>
-    <string name="gcm_defaultSenderId" translatable="false">123456789012</string>
-    <string name="default_web_client_id" translatable="false">123456789012-abcdef.apps.googleusercontent.com</string>
-    <string name="firebase_database_url" translatable="false">https://holiday-wishes-default.firebaseio.com</string>
-    <string name="project_id" translatable="false">holiday-wishes</string>
+    <!-- Firebase configuration strings -->
+    <string name="google_app_id" translatable="false">1:308212671802:android:ba9ddcb9de5e4432c01c03</string>
+    <string name="gcm_defaultSenderId" translatable="false">308212671802</string>
+    <string name="default_web_client_id" translatable="false">308212671802-pnd9vt3s7030lgqetc2ghhuoc4f070ra.apps.googleusercontent.com</string>
+    <string name="project_id" translatable="false">shining-bazaar-464702-v0</string>
 </resources>

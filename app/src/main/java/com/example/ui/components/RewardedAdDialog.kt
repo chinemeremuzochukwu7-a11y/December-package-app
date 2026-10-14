@@ -257,11 +257,19 @@ fun RewardedAdDialog(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Claim & Customize Card Now",
+                            text = "Claim & Customize (Today)",
                             fontWeight = FontWeight.Bold,
                             color = Color.White
                         )
                     }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "Unlocked for today • Locks again at midnight",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontSize = 11.sp,
+                        textAlign = TextAlign.Center
+                    )
                 } else {
                     Text(
                         text = "Reward will be awarded in $secondsRemaining seconds...",

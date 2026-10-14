@@ -38,9 +38,18 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import java.util.Calendar
+import java.util.concurrent.TimeUnit
+import java.util.Locale
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -116,6 +125,7 @@ fun HomeScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    // Single Pro status badge (Credit display is exclusively shown on top in HolidayTopAppBar)
                     Surface(
                         shape = RoundedCornerShape(20.dp),
                         color = if (isPro) Color(0xFFFFD700).copy(alpha = 0.18f) else HolidayCrimson.copy(alpha = 0.12f),
@@ -124,36 +134,15 @@ fun HomeScreen(
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                         ) {
                             Text(text = if (isPro) "👑" else "★", fontSize = 13.sp)
-                            Spacer(modifier = Modifier.width(5.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = if (isPro) "PRO ACTIVE" else "Get Pro Access",
+                                text = if (isPro) "PRO ACTIVE • VIP PASS" else "Upgrade to Pro Pass ($9.99/mo)",
                                 fontSize = 11.5.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = if (isPro) HolidayGold else HolidayCrimson
-                            )
-                        }
-                    }
-
-                    Surface(
-                        shape = RoundedCornerShape(20.dp),
-                        color = HolidayGold.copy(alpha = 0.16f),
-                        border = BorderStroke(1.dp, HolidayGold.copy(alpha = 0.4f)),
-                        modifier = Modifier.clickable { onNavigateToPro() }
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
-                        ) {
-                            Text(text = "🪙", fontSize = 13.sp)
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = "$credits Credits",
-                                fontSize = 11.5.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = HolidayGold
                             )
                         }
                     }
@@ -266,6 +255,15 @@ fun HomeScreen(
                     onMealsClick = onNavigateToMeals,
                     onAlarmsClick = onNavigateToAlarms
                 )
+            }
+
+            // Section: Before Year-End Season Earnings & Goal Forecaster
+            item {
+                Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
+                    SeasonEarningsForecasterCard(
+                        onNavigateToExpenses = onNavigateToExpenses
+                    )
+                }
             }
 
         // Section: Create a Holiday Card Spotlight
@@ -1091,6 +1089,164 @@ private fun TrackerQuickCard(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
+        }
+    }
+}
+
+@Composable
+fun SeasonEarningsForecasterCard(
+    onNavigateToExpenses: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var seasonEarningsInput by remember { mutableStateOf("2500") }
+    var holidayBudgetInput by remember { mutableStateOf("800") }
+
+    val earnings = seasonEarningsInput.toDoubleOrNull() ?: 0.0
+    val expenses = holidayBudgetInput.toDoubleOrNull() ?: 0.0
+    val netProfit = earnings - expenses
+
+    val calendar = Calendar.getInstance()
+    val today = calendar.timeInMillis
+    val endOfYearCalendar = Calendar.getInstance().apply {
+        set(Calendar.MONTH, Calendar.DECEMBER)
+        set(Calendar.DAY_OF_MONTH, 31)
+        set(Calendar.HOUR_OF_DAY, 23)
+        set(Calendar.MINUTE, 59)
+    }
+    val diffMillis = (endOfYearCalendar.timeInMillis - today).coerceAtLeast(0L)
+    val daysRemaining = (TimeUnit.MILLISECONDS.toDays(diffMillis) + 1).coerceAtLeast(1)
+    val dailyPacing = if (daysRemaining > 0 && netProfit > 0) netProfit / daysRemaining else 0.0
+
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .testTag("season_earnings_forecaster_card"),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, HolidayGold.copy(alpha = 0.45f))
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(text = "💰", fontSize = 22.sp)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Column {
+                        Text(
+                            text = "Season Earnings & Profit",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "How much you will make & save before year end",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = HolidayPineGreen.copy(alpha = 0.15f),
+                    border = BorderStroke(1.dp, HolidayPineGreen)
+                ) {
+                    Text(
+                        text = "$daysRemaining days left",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = HolidayPineGreen,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
+            }
+
+            // Two input fields side by side
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedTextField(
+                    value = seasonEarningsInput,
+                    onValueChange = { seasonEarningsInput = it.filter { ch -> ch.isDigit() || ch == '.' } },
+                    label = { Text("Season Earnings ($)") },
+                    singleLine = true,
+                    modifier = Modifier.weight(1f).testTag("season_earnings_input"),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = HolidayPineGreen)
+                )
+                OutlinedTextField(
+                    value = holidayBudgetInput,
+                    onValueChange = { holidayBudgetInput = it.filter { ch -> ch.isDigit() || ch == '.' } },
+                    label = { Text("Holiday Costs ($)") },
+                    singleLine = true,
+                    modifier = Modifier.weight(1f).testTag("season_expenses_input"),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = HolidayCrimson)
+                )
+            }
+
+            // Profit / Savings Result Callout
+            Surface(
+                shape = RoundedCornerShape(14.dp),
+                color = HolidayGold.copy(alpha = 0.12f),
+                border = BorderStroke(1.dp, HolidayGold.copy(alpha = 0.35f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = "Net Take-Home Before Year-End:",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = "$${String.format(Locale.US, "%,.2f", netProfit)}",
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = if (netProfit >= 0) HolidayPineGreen else HolidayCrimson
+                        )
+                    }
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            text = "Daily Target:",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = "$${String.format(Locale.US, "%.1f", dailyPacing)}/day",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = HolidayGold
+                        )
+                    }
+                }
+            }
+
+            // Navigation to tracker
+            Button(
+                onClick = onNavigateToExpenses,
+                colors = ButtonDefaults.buttonColors(containerColor = HolidayPineGreen),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth().testTag("open_expenses_tracker_button")
+            ) {
+                Icon(Icons.Default.AttachMoney, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Manage Full Holiday Expenses & Budget 📊", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+            }
         }
     }
 }

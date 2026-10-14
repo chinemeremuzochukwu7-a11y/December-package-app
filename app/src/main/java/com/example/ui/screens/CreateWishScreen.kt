@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
@@ -20,8 +21,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
@@ -35,12 +38,16 @@ import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -48,6 +55,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.ui.components.ScheduleGreetingDialog
+import com.example.ui.theme.HolidayPineGreen
+import com.example.utils.WishExporter
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.model.GeneratorOccasion
@@ -416,16 +426,86 @@ private fun GeneratedWishCard(
 
             Spacer(modifier = Modifier.height(14.dp))
 
+            var showScheduleDialog by remember { mutableStateOf(false) }
+
+            if (showScheduleDialog) {
+                ScheduleGreetingDialog(
+                    greetingTitle = "${result.occasion.label} Wish",
+                    initialRecipientName = result.recipient.label,
+                    messageText = result.wishText,
+                    onDismiss = { showScheduleDialog = false },
+                    onScheduledSuccess = { timeStr ->
+                        Toast.makeText(
+                            context,
+                            "Wish scheduled for $timeStr! 🚀 You will receive a prompt to auto-send on WhatsApp when the time arrives.",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+                )
+            }
+
+            // Action Buttons Row: Download Wish, Schedule Auto-Send, Copy, Share
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
+                // Download Wish to Device
+                Button(
+                    onClick = {
+                        val imageSaved = WishExporter.saveWishAsImageToGallery(
+                            context = context,
+                            wishText = result.wishText,
+                            occasionTitle = "${result.occasion.label} Wish",
+                            recipientName = result.recipient.label
+                        )
+                        WishExporter.saveWishAsTextFileToDownloads(
+                            context = context,
+                            wishText = result.wishText,
+                            occasionTitle = "${result.occasion.label} Wish"
+                        )
+                        if (imageSaved) {
+                            Toast.makeText(context, "Wish downloaded to your device Gallery & Downloads! 📥✨", Toast.LENGTH_LONG).show()
+                        } else {
+                            Toast.makeText(context, "Saved to device storage! 📥", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = HolidayPineGreen),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.weight(1f).height(38.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Download,
+                        contentDescription = null,
+                        modifier = Modifier.size(15.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Download", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                }
+
+                // Schedule Auto-Send to WhatsApp/Media
+                OutlinedButton(
+                    onClick = { showScheduleDialog = true },
+                    shape = RoundedCornerShape(10.dp),
+                    border = BorderStroke(1.dp, HolidayCrimson),
+                    modifier = Modifier.weight(1f).height(38.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.AccessTime,
+                        contentDescription = null,
+                        tint = HolidayCrimson,
+                        modifier = Modifier.size(15.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Schedule", color = HolidayCrimson, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                }
+
                 IconButton(
                     onClick = {
                         val textToCopy = if (isProUser) result.wishText else "${result.wishText}\n\n✨ Made with Holiday Wishes 🎄"
                         ClipboardHelper.copyText(context, textToCopy)
                     },
-                    modifier = Modifier.testTag("copy_generated_button")
+                    modifier = Modifier.size(36.dp).testTag("copy_generated_button")
                 ) {
                     Icon(
                         imageVector = Icons.Default.ContentCopy,
@@ -437,7 +517,7 @@ private fun GeneratedWishCard(
 
                 IconButton(
                     onClick = { ShareHelper.shareWish(context, result.wishText, "Holiday Wish") },
-                    modifier = Modifier.testTag("share_generated_button")
+                    modifier = Modifier.size(36.dp).testTag("share_generated_button")
                 ) {
                     Icon(
                         imageVector = Icons.Default.Share,
