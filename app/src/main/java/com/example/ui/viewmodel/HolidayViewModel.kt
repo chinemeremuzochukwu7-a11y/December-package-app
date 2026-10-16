@@ -357,7 +357,7 @@ class HolidayViewModel(application: Application) : AndroidViewModel(application)
                 createdAt = System.currentTimeMillis()
             )
             cardRepository.saveCard(newCard)
-            val user = com.google.firebase.Firebase.auth.currentUser
+            val user = com.example.data.firebase.FirestoreManager.currentUser
             if (user != null) {
                 try {
                     com.example.data.firebase.FirestoreCardsRepository(getApplication()).saveCard(
@@ -387,7 +387,7 @@ class HolidayViewModel(application: Application) : AndroidViewModel(application)
     fun deleteSavedCard(id: String) {
         viewModelScope.launch {
             cardRepository.deleteCard(id)
-            val user = com.google.firebase.Firebase.auth.currentUser
+            val user = com.example.data.firebase.FirestoreManager.currentUser
             if (user != null) {
                 try {
                     com.example.data.firebase.FirestoreCardsRepository(getApplication()).deleteCard(user.uid, id)

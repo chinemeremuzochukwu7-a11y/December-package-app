@@ -39,8 +39,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             HolidayWishesTheme {
-                val auth = FirestoreManager.auth
-                val currentUser by FirestoreManager.authStateFlow().collectAsStateWithLifecycle(initialValue = auth.currentUser)
+                val currentUser by FirestoreManager.authStateFlow().collectAsStateWithLifecycle(initialValue = FirestoreManager.currentUser)
                 val user = currentUser
 
                 if (user == null) {
@@ -115,8 +114,6 @@ fun HolidayWishesApp(
                      currentRoute == Screen.MyCards.route ||
                      currentRoute == Screen.ProSubscription.route ||
                      currentRoute == Screen.CustomerCenter.route
-
-    val context = androidx.compose.ui.platform.LocalContext.current
 
     ModalNavigationDrawer(
         drawerState = drawerState,

@@ -36,45 +36,58 @@ class UserFirestoreRepository(private val db: FirebaseFirestore) {
      * Every new user receives exactly 25 credits as requested.
      */
     suspend fun ensureUserInitialized(user: FirebaseUser): UserProfile {
-        val userDoc = db.collection("users").document(user.uid)
-        val snapshot = userDoc.get().await()
-
         val nowString = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).format(Date())
+        return try {
+            val userDoc = db.collection("users").document(user.uid)
+            val snapshot = userDoc.get().await()
 
-        if (!snapshot.exists()) {
-            val initialProfile = UserProfile(
+            if (!snapshot.exists()) {
+                val initialProfile = UserProfile(
+                    userId = user.uid,
+                    email = user.email ?: "",
+                    displayName = user.displayName ?: "Holiday Friend",
+                    credits = 25L, // Exactly 25 credits for every new user
+                    isPro = false,
+                    createdAt = nowString,
+                    updatedAt = nowString
+                )
+                val data = hashMapOf(
+                    "userId" to initialProfile.userId,
+                    "email" to initialProfile.email,
+                    "displayName" to initialProfile.displayName,
+                    "credits" to initialProfile.credits,
+                    "isPro" to initialProfile.isPro,
+                    "createdAt" to initialProfile.createdAt,
+                    "updatedAt" to initialProfile.updatedAt
+                )
+                userDoc.set(data).await()
+                SubscriptionManager.syncWithFirestore(25, false)
+                initialProfile
+            } else {
+                val credits = snapshot.getLong("credits") ?: 25L
+                val isPro = snapshot.getBoolean("isPro") ?: false
+                SubscriptionManager.syncWithFirestore(credits.toInt(), isPro)
+                UserProfile(
+                    userId = user.uid,
+                    email = snapshot.getString("email") ?: (user.email ?: ""),
+                    displayName = snapshot.getString("displayName") ?: (user.displayName ?: "Holiday Friend"),
+                    credits = credits,
+                    isPro = isPro,
+                    createdAt = snapshot.getString("createdAt") ?: nowString,
+                    updatedAt = snapshot.getString("updatedAt") ?: nowString
+                )
+            }
+        } catch (e: Exception) {
+            Log.w("UserFirestoreRepo", "Notice initializing user profile: ${e.message}")
+            SubscriptionManager.syncWithFirestore(25, false)
+            UserProfile(
                 userId = user.uid,
                 email = user.email ?: "",
                 displayName = user.displayName ?: "Holiday Friend",
-                credits = 25L, // Exactly 25 credits for every new user
+                credits = 25L,
                 isPro = false,
                 createdAt = nowString,
                 updatedAt = nowString
-            )
-            val data = hashMapOf(
-                "userId" to initialProfile.userId,
-                "email" to initialProfile.email,
-                "displayName" to initialProfile.displayName,
-                "credits" to initialProfile.credits,
-                "isPro" to initialProfile.isPro,
-                "createdAt" to initialProfile.createdAt,
-                "updatedAt" to initialProfile.updatedAt
-            )
-            userDoc.set(data).await()
-            SubscriptionManager.syncWithFirestore(25, false)
-            return initialProfile
-        } else {
-            val credits = snapshot.getLong("credits") ?: 25L
-            val isPro = snapshot.getBoolean("isPro") ?: false
-            SubscriptionManager.syncWithFirestore(credits.toInt(), isPro)
-            return UserProfile(
-                userId = user.uid,
-                email = snapshot.getString("email") ?: (user.email ?: ""),
-                displayName = snapshot.getString("displayName") ?: (user.displayName ?: "Holiday Friend"),
-                credits = credits,
-                isPro = isPro,
-                createdAt = snapshot.getString("createdAt") ?: nowString,
-                updatedAt = snapshot.getString("updatedAt") ?: nowString
             )
         }
     }

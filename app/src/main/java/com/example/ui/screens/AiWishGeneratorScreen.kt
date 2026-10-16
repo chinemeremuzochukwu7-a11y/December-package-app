@@ -110,6 +110,7 @@ import com.example.utils.ShareHelper
 fun AiWishGeneratorScreen(
     viewModel: HolidayViewModel,
     onNavigateToCreateCard: () -> Unit,
+    onNavigateToPro: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val occasion by viewModel.aiOccasion.collectAsStateWithLifecycle()
@@ -154,6 +155,8 @@ fun AiWishGeneratorScreen(
                 } else {
                     if (SubscriptionManager.useCredits(SubscriptionManager.WISH_CREATION_CREDIT_COST)) {
                         viewModel.generateAiWish()
+                    } else {
+                        showCreditDialog = true
                     }
                 }
             }
@@ -164,24 +167,47 @@ fun AiWishGeneratorScreen(
         AlertDialog(
             onDismissRequest = { showCreditDialog = false },
             title = {
-                Text("Need More Credits 🌟", fontWeight = FontWeight.Bold)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("👑", fontSize = 22.sp)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Upgrade to Continue Generating", fontWeight = FontWeight.Bold)
+                }
             },
             text = {
-                Text(
-                    "Creating a wish costs 10 credits. You currently have $credits credits.\n\nWatch a rewarded ad to earn 1 credit each, or upgrade to Pro for unlimited generation!"
-                )
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "Creating a wish requires ${SubscriptionManager.WISH_CREATION_CREDIT_COST} credits. You currently have $credits credits in Firestore.",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Text(
+                        "Please upgrade to Holiday Wishes Pro for UNLIMITED AI generations, or watch a rewarded video to earn credits!",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             },
             confirmButton = {
-                Button(
-                    onClick = {
-                        showCreditDialog = false
-                        if (activity != null) {
-                            AdManager.showRewardedAd(activity)
-                        }
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = HolidayCrimson)
-                ) {
-                    Text("Watch Ad (+1 Credit)")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = {
+                            showCreditDialog = false
+                            onNavigateToPro()
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = HolidayGold)
+                    ) {
+                        Text("Upgrade Pro 👑", color = Color(0xFF3E2723), fontWeight = FontWeight.Bold)
+                    }
+                    Button(
+                        onClick = {
+                            showCreditDialog = false
+                            if (activity != null) {
+                                AdManager.showRewardedAd(activity)
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = HolidayCrimson)
+                    ) {
+                        Text("Watch Ad (+1)")
+                    }
                 }
             },
             dismissButton = {

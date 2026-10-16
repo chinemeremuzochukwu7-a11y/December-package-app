@@ -18,21 +18,46 @@ import kotlinx.coroutines.flow.callbackFlow
 object FirestoreManager {
 
     fun getFirestore(context: Context): FirebaseFirestore {
-        val databaseId = context.applicationContext.getString(R.string.firestore_database_id)
-        return FirebaseFirestore.getInstance(databaseId)
+        val databaseId = try {
+            context.applicationContext.getString(R.string.firestore_database_id)
+        } catch (_: Exception) {
+            ""
+        }
+        return if (databaseId.isNotBlank()) {
+            try {
+                FirebaseFirestore.getInstance(databaseId)
+            } catch (_: Exception) {
+                FirebaseFirestore.getInstance()
+            }
+        } else {
+            FirebaseFirestore.getInstance()
+        }
     }
 
     val auth: FirebaseAuth
-        get() = Firebase.auth
+        get() = try {
+            FirebaseAuth.getInstance()
+        } catch (_: Exception) {
+            Firebase.auth
+        }
 
     val currentUser: FirebaseUser?
-        get() = Firebase.auth.currentUser
+        get() = try {
+            auth.currentUser
+        } catch (_: Exception) {
+            null
+        }
 
     fun authStateFlow(): Flow<FirebaseUser?> = callbackFlow {
-        val listener = FirebaseAuth.AuthStateListener { firebaseAuth ->
-            trySend(firebaseAuth.currentUser)
+        try {
+            val listener = FirebaseAuth.AuthStateListener { firebaseAuth ->
+                trySend(firebaseAuth.currentUser)
+            }
+            auth.addAuthStateListener(listener)
+            awaitClose { auth.removeAuthStateListener(listener) }
+        } catch (_: Exception) {
+            trySend(null)
+            awaitClose {}
         }
-        auth.addAuthStateListener(listener)
-        awaitClose { auth.removeAuthStateListener(listener) }
     }
 }

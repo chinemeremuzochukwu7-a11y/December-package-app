@@ -119,6 +119,11 @@ fun HolidayNavHost(
                     navController.navigate(Screen.CustomizeCard.route) {
                         launchSingleTop = true
                     }
+                },
+                onNavigateToPro = {
+                    navController.navigate(Screen.ProSubscription.route) {
+                        launchSingleTop = true
+                    }
                 }
             )
         }
@@ -128,6 +133,11 @@ fun HolidayNavHost(
                 viewModel = viewModel,
                 onNavigateToCreateCard = {
                     navController.navigate(Screen.CustomizeCard.route) {
+                        launchSingleTop = true
+                    }
+                },
+                onNavigateToPro = {
+                    navController.navigate(Screen.ProSubscription.route) {
                         launchSingleTop = true
                     }
                 }
