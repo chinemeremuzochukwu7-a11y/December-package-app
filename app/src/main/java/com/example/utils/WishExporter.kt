@@ -263,6 +263,173 @@ object WishExporter {
     }
 
     /**
+     * Universal and platform-specific dispatcher helper for scheduled and direct greetings.
+     */
+    fun sendToPlatform(
+        context: Context,
+        platform: String,
+        message: String,
+        phoneNumber: String? = null,
+        email: String? = null,
+        imageUri: Uri? = null
+    ) {
+        val cleanPhone = phoneNumber?.replace(Regex("[^0-9+]"), "") ?: ""
+        val normalizedPlatform = platform.trim().lowercase()
+
+        try {
+            when {
+                normalizedPlatform.contains("whatsapp") -> {
+                    if (imageUri != null) {
+                        val intent = Intent(Intent.ACTION_SEND).apply {
+                            type = "image/png"
+                            putExtra(Intent.EXTRA_STREAM, imageUri)
+                            putExtra(Intent.EXTRA_TEXT, message)
+                            setPackage("com.whatsapp")
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        context.startActivity(intent)
+                    } else if (cleanPhone.isNotBlank()) {
+                        val numericOnly = cleanPhone.replace("+", "")
+                        val url = "https://api.whatsapp.com/send?phone=$numericOnly&text=${URLEncoder.encode(message, "UTF-8")}"
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+                            setPackage("com.whatsapp")
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        context.startActivity(intent)
+                    } else {
+                        val intent = Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_TEXT, message)
+                            setPackage("com.whatsapp")
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        context.startActivity(intent)
+                    }
+                }
+                normalizedPlatform.contains("telegram") -> {
+                    val intent = Intent(Intent.ACTION_SEND).apply {
+                        type = if (imageUri != null) "image/png" else "text/plain"
+                        if (imageUri != null) {
+                            putExtra(Intent.EXTRA_STREAM, imageUri)
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        }
+                        putExtra(Intent.EXTRA_TEXT, message)
+                        setPackage("org.telegram.messenger")
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    context.startActivity(intent)
+                }
+                normalizedPlatform.contains("instagram") -> {
+                    val intent = Intent(Intent.ACTION_SEND).apply {
+                        type = if (imageUri != null) "image/png" else "text/plain"
+                        if (imageUri != null) {
+                            putExtra(Intent.EXTRA_STREAM, imageUri)
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        }
+                        putExtra(Intent.EXTRA_TEXT, message)
+                        setPackage("com.instagram.android")
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    context.startActivity(intent)
+                }
+                normalizedPlatform.contains("messenger") || normalizedPlatform.contains("facebook") -> {
+                    val intent = Intent(Intent.ACTION_SEND).apply {
+                        type = if (imageUri != null) "image/png" else "text/plain"
+                        if (imageUri != null) {
+                            putExtra(Intent.EXTRA_STREAM, imageUri)
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        }
+                        putExtra(Intent.EXTRA_TEXT, message)
+                        setPackage("com.facebook.orca")
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    context.startActivity(intent)
+                }
+                normalizedPlatform.contains("twitter") || normalizedPlatform.contains("x") -> {
+                    val intent = Intent(Intent.ACTION_SEND).apply {
+                        type = if (imageUri != null) "image/png" else "text/plain"
+                        if (imageUri != null) {
+                            putExtra(Intent.EXTRA_STREAM, imageUri)
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        }
+                        putExtra(Intent.EXTRA_TEXT, message)
+                        setPackage("com.twitter.android")
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    context.startActivity(intent)
+                }
+                normalizedPlatform.contains("sms") || normalizedPlatform.contains("message") -> {
+                    val uri = if (cleanPhone.isNotBlank()) Uri.parse("smsto:$cleanPhone") else Uri.parse("smsto:")
+                    val intent = Intent(Intent.ACTION_SENDTO, uri).apply {
+                        putExtra("sms_body", message)
+                        if (imageUri != null) {
+                            putExtra(Intent.EXTRA_STREAM, imageUri)
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        }
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    context.startActivity(intent)
+                }
+                normalizedPlatform.contains("email") || normalizedPlatform.contains("gmail") -> {
+                    val uri = if (!email.isNullOrBlank()) Uri.parse("mailto:$email") else Uri.parse("mailto:")
+                    val intent = Intent(Intent.ACTION_SENDTO, uri).apply {
+                        putExtra(Intent.EXTRA_SUBJECT, "Holiday Greeting 🎄✨")
+                        putExtra(Intent.EXTRA_TEXT, message)
+                        if (imageUri != null) {
+                            putExtra(Intent.EXTRA_STREAM, imageUri)
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        }
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    context.startActivity(intent)
+                }
+                normalizedPlatform.contains("snapchat") -> {
+                    val intent = Intent(Intent.ACTION_SEND).apply {
+                        type = if (imageUri != null) "image/png" else "text/plain"
+                        if (imageUri != null) {
+                            putExtra(Intent.EXTRA_STREAM, imageUri)
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        }
+                        putExtra(Intent.EXTRA_TEXT, message)
+                        setPackage("com.snapchat.android")
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    context.startActivity(intent)
+                }
+                else -> {
+                    // Universal Android system share chooser
+                    val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                        type = if (imageUri != null) "image/png" else "text/plain"
+                        if (imageUri != null) {
+                            putExtra(Intent.EXTRA_STREAM, imageUri)
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        }
+                        putExtra(Intent.EXTRA_TEXT, message)
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    context.startActivity(Intent.createChooser(sendIntent, "Share Holiday Greeting via").apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    })
+                }
+            }
+        } catch (_: Exception) {
+            // Target app not installed or blocked: graceful fallback to universal system share chooser
+            val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                type = if (imageUri != null) "image/png" else "text/plain"
+                if (imageUri != null) {
+                    putExtra(Intent.EXTRA_STREAM, imageUri)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                putExtra(Intent.EXTRA_TEXT, message)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(Intent.createChooser(sendIntent, "Send Holiday Greeting via").apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            })
+        }
+    }
+
+    /**
      * Direct WhatsApp dispatcher helper.
      */
     fun sendDirectToWhatsApp(
@@ -271,47 +438,12 @@ object WishExporter {
         phoneNumber: String? = null,
         imageUri: Uri? = null
     ) {
-        try {
-            val cleanPhone = phoneNumber?.replace(Regex("[^0-9]"), "") ?: ""
-            if (imageUri != null) {
-                // Send with Image Attachment
-                val intent = Intent(Intent.ACTION_SEND).apply {
-                    type = "image/png"
-                    putExtra(Intent.EXTRA_STREAM, imageUri)
-                    putExtra(Intent.EXTRA_TEXT, message)
-                    setPackage("com.whatsapp")
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-                context.startActivity(intent)
-            } else if (cleanPhone.isNotBlank()) {
-                // Direct WhatsApp chat link
-                val url = "https://api.whatsapp.com/send?phone=$cleanPhone&text=${URLEncoder.encode(message, "UTF-8")}"
-                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
-                    setPackage("com.whatsapp")
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-                context.startActivity(intent)
-            } else {
-                // WhatsApp generic share
-                val intent = Intent(Intent.ACTION_SEND).apply {
-                    type = "text/plain"
-                    putExtra(Intent.EXTRA_TEXT, message)
-                    setPackage("com.whatsapp")
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-                context.startActivity(intent)
-            }
-        } catch (e: Exception) {
-            // WhatsApp not installed or error: fallback to general chooser
-            val sendIntent = Intent(Intent.ACTION_SEND).apply {
-                type = if (imageUri != null) "image/png" else "text/plain"
-                if (imageUri != null) putExtra(Intent.EXTRA_STREAM, imageUri)
-                putExtra(Intent.EXTRA_TEXT, message)
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-            context.startActivity(Intent.createChooser(sendIntent, "Share via").apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            })
-        }
+        sendToPlatform(
+            context = context,
+            platform = "WhatsApp",
+            message = message,
+            phoneNumber = phoneNumber,
+            imageUri = imageUri
+        )
     }
 }

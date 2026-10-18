@@ -30,6 +30,8 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.PhotoAlbum
 import androidx.compose.material.icons.filled.Restaurant
+import androidx.compose.material.icons.filled.ReceiptLong
+import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.SupportAgent
@@ -157,111 +159,109 @@ fun HolidayNavigationDrawer(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Section 1: Templates & Festive Creations (Top Highlight)
-            DrawerSectionHeader(title = "🎨 TEMPLATES & CREATOR (1,000+)")
-
+            // 1. Home
             DrawerNavItem(
                 icon = Icons.Default.Home,
                 title = "Home",
                 isSelected = currentRoute == Screen.Home.route,
-                onClick = { onNavigateToRoute(Screen.Home.route) }
+                onClick = { onNavigateToRoute(Screen.Home.route) },
+                iconTint = HolidayCrimson
             )
 
+            // 2. Ai wish generator
+            DrawerNavItem(
+                icon = Icons.Default.AutoAwesome,
+                title = "Ai wish generator",
+                isSelected = currentRoute == Screen.AiWishGenerator.route || currentRoute == Screen.CreateWish.route,
+                onClick = { onNavigateToRoute(Screen.AiWishGenerator.route) },
+                iconTint = HolidayGold
+            )
+
+            // 3. Wishes library
+            DrawerNavItem(
+                icon = Icons.AutoMirrored.Filled.Comment,
+                title = "Wishes library",
+                isSelected = currentRoute == Screen.Wishes.route,
+                onClick = { onNavigateToRoute(Screen.Wishes.route) },
+                iconTint = HolidayCrimson
+            )
+
+            // 4. Card library
             DrawerNavItem(
                 icon = Icons.Default.CardGiftcard,
-                title = "🎨 Card Templates (1,000+)",
-                badge = "1,000+",
+                title = "Card library",
                 isSelected = currentRoute == Screen.Cards.route,
                 onClick = { onNavigateToRoute(Screen.Cards.route) },
                 iconTint = HolidayCrimson
             )
 
+            // 5. Template
             DrawerNavItem(
-                icon = Icons.Default.AcUnit,
-                title = "❄️ Season Templates (500+)",
-                badge = "500+ New",
-                isSelected = false,
-                onClick = { onNavigateToRoute(Screen.Cards.route) },
+                icon = Icons.Default.PhotoAlbum,
+                title = "Template",
+                isSelected = currentRoute == Screen.CustomizeCard.route,
+                onClick = { onNavigateToRoute(Screen.CustomizeCard.route) },
                 iconTint = Color(0xFF00D2FC)
             )
 
-            DrawerNavItem(
-                icon = Icons.Default.Alarm,
-                title = "⏰ Scheduled Delivery & Alarms",
-                badge = "Schedule",
-                isSelected = currentRoute == Screen.AlarmReminder.route,
-                onClick = { onNavigateToRoute(Screen.AlarmReminder.route) },
-                iconTint = Color(0xFFE65100)
-            )
-
-            DrawerNavItem(
-                icon = Icons.Default.AutoAwesome,
-                title = "AI Wish Generator",
-                badge = "AI",
-                isSelected = currentRoute == Screen.AiWishGenerator.route,
-                onClick = { onNavigateToRoute(Screen.AiWishGenerator.route) },
-                iconTint = HolidayGold
-            )
-
-            DrawerNavItem(
-                icon = Icons.AutoMirrored.Filled.Comment,
-                title = "Wishes Library (1,000+)",
-                badge = "1,000+",
-                isSelected = currentRoute == Screen.Wishes.route,
-                onClick = { onNavigateToRoute(Screen.Wishes.route) }
-            )
-
-            DrawerNavItem(
-                icon = Icons.Default.PhotoAlbum,
-                title = "My Saved Cards",
-                isSelected = currentRoute == Screen.MyCards.route,
-                onClick = { onNavigateToRoute(Screen.MyCards.route) }
-            )
-
+            // 6. Save cards and wishes
             DrawerNavItem(
                 icon = Icons.Default.Favorite,
-                title = "Saved Favorites",
-                isSelected = currentRoute == Screen.Favorites.route,
-                onClick = { onNavigateToRoute(Screen.Favorites.route) },
+                title = "Save cards and wishes",
+                isSelected = currentRoute == Screen.MyCards.route || currentRoute == Screen.Favorites.route,
+                onClick = { onNavigateToRoute(Screen.MyCards.route) },
                 iconTint = HolidayCrimson
             )
 
-            DrawerDivider()
-
-            // Section 2: Daily & Season Trackers
-            DrawerSectionHeader(title = "📊 DAILY & SEASON TRACKERS")
-
-            DrawerNavItem(
-                icon = Icons.Default.AttachMoney,
-                title = "💰 Season Earnings & Expenses",
-                badge = "Forecast",
-                isSelected = currentRoute == Screen.ExpensesTracker.route,
-                onClick = { onNavigateToRoute(Screen.ExpensesTracker.route) },
-                iconTint = HolidayPineGreen
-            )
-
+            // 7. Birthday tracker and countdown
             DrawerNavItem(
                 icon = Icons.Default.Cake,
-                title = "Birthday Tracker",
-                badge = "Countdown",
+                title = "Birthday tracker and countdown",
                 isSelected = currentRoute == Screen.BirthdayTracker.route,
                 onClick = { onNavigateToRoute(Screen.BirthdayTracker.route) },
                 iconTint = HolidayCrimson
             )
 
+            // 8. Season earning tracker
+            DrawerNavItem(
+                icon = Icons.Default.AttachMoney,
+                title = "Season earning tracker",
+                isSelected = currentRoute == Screen.SeasonEarnings.route,
+                onClick = { onNavigateToRoute(Screen.SeasonEarnings.route) },
+                iconTint = HolidayPineGreen
+            )
+
+            // 9. Expenses tracker
+            DrawerNavItem(
+                icon = Icons.Default.ReceiptLong,
+                title = "Expenses tracker",
+                isSelected = currentRoute == Screen.ExpensesTracker.route,
+                onClick = { onNavigateToRoute(Screen.ExpensesTracker.route) },
+                iconTint = Color(0xFFE53935)
+            )
+
+            // 10. Daily meal tracker
             DrawerNavItem(
                 icon = Icons.Default.Restaurant,
-                title = "Daily Meal Tracker",
-                badge = "Feasts",
+                title = "Daily meal tracker",
                 isSelected = currentRoute == Screen.MealTracker.route,
                 onClick = { onNavigateToRoute(Screen.MealTracker.route) },
                 iconTint = Color(0xFFD2691E)
             )
 
+            // 11. Schedule delivery
+            DrawerNavItem(
+                icon = Icons.Default.Send,
+                title = "Schedule delivery",
+                isSelected = currentRoute == Screen.ScheduleDelivery.route,
+                onClick = { onNavigateToRoute(Screen.ScheduleDelivery.route) },
+                iconTint = Color(0xFF1E88E5)
+            )
+
+            // 12. Alarm and reminder
             DrawerNavItem(
                 icon = Icons.Default.Alarm,
-                title = "⏰ Schedule Reminders",
-                badge = "Alarms",
+                title = "Alarm and reminder",
                 isSelected = currentRoute == Screen.AlarmReminder.route,
                 onClick = { onNavigateToRoute(Screen.AlarmReminder.route) },
                 iconTint = Color(0xFFE65100)
@@ -269,13 +269,12 @@ fun HolidayNavigationDrawer(
 
             DrawerDivider()
 
-            // Section 3: Settings & Support
+            // 3 Account & Support items
             DrawerSectionHeader(title = "ACCOUNT & SUPPORT")
 
             DrawerNavItem(
                 icon = Icons.Default.Star,
                 title = "Holiday Wishes Pro",
-                badge = if (isPro) "Active" else "Upgrade",
                 isSelected = currentRoute == Screen.ProSubscription.route,
                 onClick = { onNavigateToRoute(Screen.ProSubscription.route) },
                 iconTint = HolidayGold
@@ -283,9 +282,10 @@ fun HolidayNavigationDrawer(
 
             DrawerNavItem(
                 icon = Icons.Default.SupportAgent,
-                title = "Customer Center",
+                title = "Customer Support",
                 isSelected = currentRoute == Screen.CustomerCenter.route,
-                onClick = { onNavigateToRoute(Screen.CustomerCenter.route) }
+                onClick = { onNavigateToRoute(Screen.CustomerCenter.route) },
+                iconTint = Color(0xFF1976D2)
             )
 
             DrawerNavItem(
@@ -293,16 +293,6 @@ fun HolidayNavigationDrawer(
                 title = "Settings & Preferences",
                 isSelected = currentRoute == Screen.Settings.route,
                 onClick = { onNavigateToRoute(Screen.Settings.route) }
-            )
-
-            DrawerNavItem(
-                icon = Icons.AutoMirrored.Filled.ExitToApp,
-                title = "Sign Out",
-                isSelected = false,
-                onClick = {
-                    FirestoreManager.auth.signOut()
-                },
-                iconTint = HolidayCrimson
             )
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -327,7 +317,6 @@ private fun DrawerSectionHeader(title: String) {
 private fun DrawerNavItem(
     icon: ImageVector,
     title: String,
-    badge: String? = null,
     isSelected: Boolean,
     onClick: () -> Unit,
     iconTint: Color? = null
@@ -341,33 +330,12 @@ private fun DrawerNavItem(
             )
         },
         label = {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.bodyMedium.copy(
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
-                    ),
-                    modifier = Modifier.weight(1f)
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
                 )
-                badge?.let {
-                    Surface(
-                        shape = RoundedCornerShape(6.dp),
-                        color = if (isSelected) HolidayCrimson else MaterialTheme.colorScheme.surfaceVariant
-                    ) {
-                        Text(
-                            text = it,
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontWeight = FontWeight.Bold,
-                                color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
-                            ),
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                        )
-                    }
-                }
-            }
+            )
         },
         selected = isSelected,
         onClick = onClick,

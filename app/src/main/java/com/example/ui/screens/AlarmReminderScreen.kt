@@ -95,6 +95,7 @@ import java.util.Locale
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AlarmReminderScreen(
+    initialTab: Int = 0,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -102,7 +103,7 @@ fun AlarmReminderScreen(
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
-    var selectedTab by remember { mutableIntStateOf(0) } // 0 = Alarms, 1 = Reminders, 2 = Scheduled Greetings
+    var selectedTab by remember(initialTab) { mutableIntStateOf(initialTab.coerceIn(0, 2)) } // 0 = Alarms, 1 = Reminders, 2 = Scheduled Greetings
     val allAlarms by repository.getAllAlarms().collectAsState(initial = emptyList())
     val allScheduledGreetings by repository.getAllScheduledGreetings().collectAsState(initial = emptyList())
 
@@ -357,11 +358,22 @@ fun AlarmReminderScreen(
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Text(if (greeting.targetPlatform == "WhatsApp") "💬" else "📤", fontSize = 18.sp)
+                                            val platEmoji = when (greeting.targetPlatform.lowercase()) {
+                                                "whatsapp" -> "💬"
+                                                "telegram" -> "✈️"
+                                                "instagram" -> "📸"
+                                                "messenger" -> "📘"
+                                                "twitter" -> "🐦"
+                                                "sms" -> "✉️"
+                                                "email" -> "📧"
+                                                "snapchat" -> "👻"
+                                                else -> "📤"
+                                            }
+                                            Text(platEmoji, fontSize = 18.sp)
                                             Spacer(modifier = Modifier.width(8.dp))
                                             Column {
                                                 Text(
-                                                    text = "To: ${greeting.recipientName}",
+                                                    text = "To: ${greeting.recipientName} (${greeting.targetPlatform})",
                                                     style = MaterialTheme.typography.titleSmall,
                                                     fontWeight = FontWeight.Bold
                                                 )
@@ -423,8 +435,9 @@ fun AlarmReminderScreen(
 
                                         Button(
                                             onClick = {
-                                                WishExporter.sendDirectToWhatsApp(
+                                                WishExporter.sendToPlatform(
                                                     context = context,
+                                                    platform = greeting.targetPlatform,
                                                     message = greeting.messageText,
                                                     phoneNumber = greeting.recipientPhone
                                                 )
@@ -434,7 +447,7 @@ fun AlarmReminderScreen(
                                         ) {
                                             Icon(Icons.Default.Send, contentDescription = null, modifier = Modifier.size(14.dp))
                                             Spacer(modifier = Modifier.width(4.dp))
-                                            Text("Send on WhatsApp", fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
+                                            Text("Send on ${greeting.targetPlatform}", fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
                                         }
                                     }
                                 }

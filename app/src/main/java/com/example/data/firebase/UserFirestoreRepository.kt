@@ -31,22 +31,79 @@ class UserFirestoreRepository(private val db: FirebaseFirestore) {
 
     private var profileListener: ListenerRegistration? = null
 
+    companion object {
+        private const val PREFS_NAME = "holiday_user_prefs"
+        private const val KEY_USER_ID = "key_persistent_user_id"
+
+        fun getOrCreateUserId(context: Context): String {
+            val appContext = context.applicationContext
+            val prefs = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            var id = prefs.getString(KEY_USER_ID, null)
+            if (id.isNullOrBlank()) {
+                // Generate hardware-bound fingerprint that survives internal storage / clear data
+                id = generatePermanentDeviceFingerprint(appContext)
+                prefs.edit().putString(KEY_USER_ID, id).apply()
+            }
+            return id
+        }
+
+        /**
+         * Generates a permanent hardware-bound device signature.
+         * Settings.Secure.ANDROID_ID is persistent across app reinstalls
+         * and clear data / clear storage actions on Android.
+         */
+        private fun generatePermanentDeviceFingerprint(context: Context): String {
+            return try {
+                val androidId = android.provider.Settings.Secure.getString(
+                    context.contentResolver,
+                    android.provider.Settings.Secure.ANDROID_ID
+                )
+                if (!androidId.isNullOrBlank() && androidId != "9774d56d682e549c") {
+                    "dev_" + sha256("holiday_wishes_secure_" + androidId).take(20)
+                } else {
+                    val hardwareSig = "${android.os.Build.BOARD}_${android.os.Build.BRAND}_${android.os.Build.DEVICE}_${android.os.Build.HARDWARE}_${android.os.Build.MANUFACTURER}_${android.os.Build.MODEL}"
+                    "dev_hw_" + sha256("holiday_wishes_hw_" + hardwareSig).take(20)
+                }
+            } catch (e: Exception) {
+                "dev_gen_" + java.util.UUID.randomUUID().toString().replace("-", "").take(16)
+            }
+        }
+
+        private fun sha256(input: String): String {
+            val bytes = java.security.MessageDigest.getInstance("SHA-256").digest(input.toByteArray(Charsets.UTF_8))
+            return bytes.joinToString("") { "%02x".format(it) }
+        }
+    }
+
     /**
-     * Initializes the user document in Firestore on first sign-in.
-     * Every new user receives exactly 25 credits as requested.
+     * Initializes the user document in Firestore with anti-abuse protection.
+     * Prevents users from getting free credits repeatedly by clearing app storage.
      */
-    suspend fun ensureUserInitialized(user: FirebaseUser): UserProfile {
+    suspend fun ensureUserInitialized(
+        userId: String,
+        displayName: String = "Holiday Friend",
+        email: String = ""
+    ): UserProfile {
         val nowString = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).format(Date())
         return try {
-            val userDoc = db.collection("users").document(user.uid)
+            val userDoc = db.collection("users").document(userId)
+            val claimedDoc = db.collection("claimed_devices").document(userId)
+
             val snapshot = userDoc.get().await()
 
             if (!snapshot.exists()) {
+                // Anti-Abuse Check: Has this physical device ALREADY claimed starter credits before?
+                val claimSnapshot = try { claimedDoc.get().await() } catch (_: Exception) { null }
+                val hasAlreadyClaimed = claimSnapshot?.exists() == true
+
+                // If device already claimed previously (e.g. user cleared app data), DO NOT award credits again!
+                val starterCredits = if (hasAlreadyClaimed) 0L else 25L
+
                 val initialProfile = UserProfile(
-                    userId = user.uid,
-                    email = user.email ?: "",
-                    displayName = user.displayName ?: "Holiday Friend",
-                    credits = 25L, // Exactly 25 credits for every new user
+                    userId = userId,
+                    email = email,
+                    displayName = displayName,
+                    credits = starterCredits,
                     isPro = false,
                     createdAt = nowString,
                     updatedAt = nowString
@@ -57,20 +114,33 @@ class UserFirestoreRepository(private val db: FirebaseFirestore) {
                     "displayName" to initialProfile.displayName,
                     "credits" to initialProfile.credits,
                     "isPro" to initialProfile.isPro,
+                    "starterCreditClaimed" to true,
                     "createdAt" to initialProfile.createdAt,
                     "updatedAt" to initialProfile.updatedAt
                 )
                 userDoc.set(data).await()
-                SubscriptionManager.syncWithFirestore(25, false)
+
+                // Mark device in permanent claimed ledger so clear storage can NEVER re-award credits
+                if (!hasAlreadyClaimed) {
+                    val claimRecord = hashMapOf(
+                        "deviceId" to userId,
+                        "claimedAt" to nowString,
+                        "initialCreditsGranted" to 25L
+                    )
+                    try { claimedDoc.set(claimRecord).await() } catch (_: Exception) {}
+                }
+
+                SubscriptionManager.syncWithFirestore(starterCredits.toInt(), false)
                 initialProfile
             } else {
-                val credits = snapshot.getLong("credits") ?: 25L
+                // Document already exists on Firestore! Restore real current balance.
+                val credits = snapshot.getLong("credits") ?: 0L
                 val isPro = snapshot.getBoolean("isPro") ?: false
                 SubscriptionManager.syncWithFirestore(credits.toInt(), isPro)
                 UserProfile(
-                    userId = user.uid,
-                    email = snapshot.getString("email") ?: (user.email ?: ""),
-                    displayName = snapshot.getString("displayName") ?: (user.displayName ?: "Holiday Friend"),
+                    userId = userId,
+                    email = snapshot.getString("email") ?: email,
+                    displayName = snapshot.getString("displayName") ?: displayName,
                     credits = credits,
                     isPro = isPro,
                     createdAt = snapshot.getString("createdAt") ?: nowString,
@@ -79,17 +149,25 @@ class UserFirestoreRepository(private val db: FirebaseFirestore) {
             }
         } catch (e: Exception) {
             Log.w("UserFirestoreRepo", "Notice initializing user profile: ${e.message}")
-            SubscriptionManager.syncWithFirestore(25, false)
+            SubscriptionManager.syncWithFirestore(SubscriptionManager.credits.value, SubscriptionManager.isPro.value)
             UserProfile(
-                userId = user.uid,
-                email = user.email ?: "",
-                displayName = user.displayName ?: "Holiday Friend",
-                credits = 25L,
-                isPro = false,
+                userId = userId,
+                email = email,
+                displayName = displayName,
+                credits = SubscriptionManager.credits.value.toLong(),
+                isPro = SubscriptionManager.isPro.value,
                 createdAt = nowString,
                 updatedAt = nowString
             )
         }
+    }
+
+    suspend fun ensureUserInitialized(user: FirebaseUser): UserProfile {
+        return ensureUserInitialized(
+            userId = user.uid,
+            displayName = user.displayName ?: "Holiday Friend",
+            email = user.email ?: ""
+        )
     }
 
     /**

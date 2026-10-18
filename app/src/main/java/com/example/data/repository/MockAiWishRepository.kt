@@ -54,7 +54,20 @@ class MockAiWishRepository : AiWishRepository {
             }
         } else ""
 
-        return "$salutation\n\n$body$personalNoteSection\n\n$signoff"
+        val tailoredBody = when (request.length) {
+            com.example.model.AiWishLength.SHORT -> {
+                body.split(".").filter { it.isNotBlank() }.take(1).joinToString(".") + "."
+            }
+            com.example.model.AiWishLength.MEDIUM -> body
+            com.example.model.AiWishLength.LONG -> {
+                body + "\n\nMay this season bring peace, abundance, and countless moments of gratitude to you and everyone you hold dearest. Cherish every memory and let joy illuminate your path forward."
+            }
+            com.example.model.AiWishLength.POETIC -> {
+                body + "\n\nLike candles glowing against the winter frost, may your home radiate with enduring grace, gentle laughter, and the timeless gift of true companionship.\n\nMay the coming days unfold like a tapestry of golden wonders, blessed with triumphant joy and quiet serenity."
+            }
+        }
+
+        return "$salutation\n\n$tailoredBody$personalNoteSection\n\n$signoff"
     }
 
     private fun getSalutation(

@@ -139,6 +139,8 @@ object SubscriptionManager : PurchasesUpdatedListener {
             _credits.value = prefs?.getInt(KEY_CREDITS, 25) ?: 25
             _activeTier.value = prefs?.getString(KEY_ACTIVE_TIER, "Free") ?: "Free"
         }
+        val userId = com.example.data.firebase.UserFirestoreRepository.getOrCreateUserId(context)
+        prefs?.edit()?.putString("current_user_id", userId)?.apply()
         if (dbId != null) {
             prefs?.edit()?.putString("firestore_db_id", dbId)?.apply()
         }
@@ -380,13 +382,14 @@ object SubscriptionManager : PurchasesUpdatedListener {
         val newTotal = _credits.value + amount
         _credits.value = newTotal
         prefs?.edit()?.putInt(KEY_CREDITS, newTotal)?.apply()
-        // Also sync to Firestore if user is signed in
-        val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
-        if (user != null) {
+        // Also sync to Firestore
+        val userId = prefs?.getString("current_user_id", null)
+            ?: com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+        if (userId != null) {
             val databaseId = prefs?.getString("firestore_db_id", null)
             val db = if (databaseId != null) com.google.firebase.firestore.FirebaseFirestore.getInstance(databaseId)
             else com.google.firebase.firestore.FirebaseFirestore.getInstance()
-            db.collection("users").document(user.uid)
+            db.collection("users").document(userId)
                 .update("credits", com.google.firebase.firestore.FieldValue.increment(amount.toLong()))
         }
     }
@@ -403,13 +406,14 @@ object SubscriptionManager : PurchasesUpdatedListener {
             val newTotal = current - amount
             _credits.value = newTotal
             prefs?.edit()?.putInt(KEY_CREDITS, newTotal)?.apply()
-            // Also deduct from Firestore if user is signed in
-            val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
-            if (user != null) {
+            // Also deduct from Firestore
+            val userId = prefs?.getString("current_user_id", null)
+                ?: com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+            if (userId != null) {
                 val databaseId = prefs?.getString("firestore_db_id", null)
                 val db = if (databaseId != null) com.google.firebase.firestore.FirebaseFirestore.getInstance(databaseId)
                 else com.google.firebase.firestore.FirebaseFirestore.getInstance()
-                db.collection("users").document(user.uid)
+                db.collection("users").document(userId)
                     .update("credits", com.google.firebase.firestore.FieldValue.increment(-amount.toLong()))
             }
             return true

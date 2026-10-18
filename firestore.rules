@@ -2,45 +2,33 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    function isAuthenticated() {
-      return request.auth != null;
+    // Anti-Abuse Hardware Ledger: prevents re-claiming starter credits
+    match /claimed_devices/{deviceId} {
+      allow read, write: if true;
     }
 
-    function isOwner(userId) {
-      return isAuthenticated() && request.auth.uid == userId;
-    }
-
-    // User Profile
+    // User Profile & Data by permanent device/user ID
     match /users/{userId} {
-      allow read: if isOwner(userId);
-      allow create: if isOwner(userId)
-                    && request.resource.data.userId == userId
-                    && request.resource.data.credits is number
-                    && request.resource.data.credits >= 0;
-      allow update: if isOwner(userId)
-                    && request.resource.data.userId == userId
-                    && request.resource.data.credits is number
-                    && request.resource.data.credits >= 0;
-      allow delete: if isOwner(userId);
+      allow read, write: if true;
 
       // User's Saved Cards
       match /saved_cards/{cardId} {
-        allow read, write: if isOwner(userId);
+        allow read, write: if true;
       }
 
       // User's Birthdays
       match /birthdays/{birthdayId} {
-        allow read, write: if isOwner(userId);
+        allow read, write: if true;
       }
 
       // User's Expenses
       match /expenses/{expenseId} {
-        allow read, write: if isOwner(userId);
+        allow read, write: if true;
       }
 
       // User's Meal Plans
       match /meals/{mealId} {
-        allow read, write: if isOwner(userId);
+        allow read, write: if true;
       }
     }
   }

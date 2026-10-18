@@ -20,6 +20,7 @@ import com.example.model.AiLanguage
 import com.example.model.AiOccasion
 import com.example.model.AiRecipient
 import com.example.model.AiTone
+import com.example.model.AiWishLength
 import com.example.model.AiWishRequest
 import com.example.model.AiWishResponse
 import com.example.model.CardDecorationStyle
@@ -105,6 +106,9 @@ class HolidayViewModel(application: Application) : AndroidViewModel(application)
 
     private val _aiLanguage = MutableStateFlow(AiLanguage.ENGLISH)
     val aiLanguage: StateFlow<AiLanguage> = _aiLanguage.asStateFlow()
+
+    private val _aiWishLength = MutableStateFlow(AiWishLength.MEDIUM)
+    val aiWishLength: StateFlow<AiWishLength> = _aiWishLength.asStateFlow()
 
     private val _aiPersonalDetails = MutableStateFlow("")
     val aiPersonalDetails: StateFlow<String> = _aiPersonalDetails.asStateFlow()
@@ -357,29 +361,28 @@ class HolidayViewModel(application: Application) : AndroidViewModel(application)
                 createdAt = System.currentTimeMillis()
             )
             cardRepository.saveCard(newCard)
-            val user = com.example.data.firebase.FirestoreManager.currentUser
-            if (user != null) {
-                try {
-                    com.example.data.firebase.FirestoreCardsRepository(getApplication()).saveCard(
-                        userId = user.uid,
-                        card = com.example.model.CustomCardData(
-                            templateId = template.id,
-                            title = template.title,
-                            recipientName = _cardRecipientName.value,
-                            message = _cardCustomMessage.value,
-                            senderName = _cardSenderName.value,
-                            primaryColorHex = template.primaryColorHex,
-                            secondaryColorHex = template.secondaryColorHex,
-                            accentColorHex = template.accentColorHex,
-                            decorationStyle = template.decorationStyle,
-                            textSizeSp = _cardTextSizeSp.value,
-                            textAlign = _cardTextAlign.value,
-                            showRecipient = _showRecipient.value,
-                            showSender = _showSender.value
-                        )
+            val userId = com.example.data.firebase.UserFirestoreRepository.getOrCreateUserId(getApplication())
+            try {
+                com.example.data.firebase.FirestoreCardsRepository(getApplication()).saveCard(
+                    userId = userId,
+                    card = com.example.model.CustomCardData(
+                        templateId = template.id,
+                        title = template.title,
+                        recipientName = _cardRecipientName.value,
+                        message = _cardCustomMessage.value,
+                        senderName = _cardSenderName.value,
+                        primaryColorHex = template.primaryColorHex,
+                        secondaryColorHex = template.secondaryColorHex,
+                        accentColorHex = template.accentColorHex,
+                        decorationStyle = template.decorationStyle,
+                        textSizeSp = _cardTextSizeSp.value,
+                        textAlign = _cardTextAlign.value,
+                        showRecipient = _showRecipient.value,
+                        showSender = _showSender.value
                     )
-                } catch (_: Exception) {}
-            }
+                )
+            } catch (_: Exception) {}
+            com.example.utils.RateAppManager.triggerMagicEvent(getApplication(), "✨ Magical Card Saved!")
             onSuccess()
         }
     }
@@ -387,12 +390,10 @@ class HolidayViewModel(application: Application) : AndroidViewModel(application)
     fun deleteSavedCard(id: String) {
         viewModelScope.launch {
             cardRepository.deleteCard(id)
-            val user = com.example.data.firebase.FirestoreManager.currentUser
-            if (user != null) {
-                try {
-                    com.example.data.firebase.FirestoreCardsRepository(getApplication()).deleteCard(user.uid, id)
-                } catch (_: Exception) {}
-            }
+            val userId = com.example.data.firebase.UserFirestoreRepository.getOrCreateUserId(getApplication())
+            try {
+                com.example.data.firebase.FirestoreCardsRepository(getApplication()).deleteCard(userId, id)
+            } catch (_: Exception) {}
         }
     }
 
@@ -467,6 +468,10 @@ class HolidayViewModel(application: Application) : AndroidViewModel(application)
         _aiLanguage.value = language
     }
 
+    fun setAiWishLength(length: AiWishLength) {
+        _aiWishLength.value = length
+    }
+
     fun setAiPersonalDetails(details: String) {
         _aiPersonalDetails.value = details
     }
@@ -486,6 +491,7 @@ class HolidayViewModel(application: Application) : AndroidViewModel(application)
                 recipientName = _aiRecipientName.value.trim(),
                 tone = _aiTone.value,
                 language = _aiLanguage.value,
+                length = _aiWishLength.value,
                 personalDetails = _aiPersonalDetails.value.trim(),
                 variationSeed = System.currentTimeMillis()
             )
@@ -504,6 +510,7 @@ class HolidayViewModel(application: Application) : AndroidViewModel(application)
                     createdAt = response.createdAt
                 )
                 aiGeneratedWishDao.insertWish(entity)
+                com.example.utils.RateAppManager.triggerMagicEvent(getApplication(), "✨ Magical AI Wish Created!")
             }.onFailure {
                 _aiErrorMessage.value = "Something went wrong. Please try again."
             }

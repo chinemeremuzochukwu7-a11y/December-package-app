@@ -37,6 +37,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -57,6 +60,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import com.example.data.subscription.SubscriptionManager
+import androidx.compose.material.icons.filled.BugReport
+import androidx.compose.material.icons.filled.Star
+import com.example.ui.components.ReportProblemDialog
+import com.example.utils.RateAppManager
 import com.example.ui.theme.HolidayCrimson
 import com.example.ui.viewmodel.HolidayViewModel
 import com.example.ui.viewmodel.SettingsDialogType
@@ -73,6 +80,7 @@ fun SettingsScreen(
     val notificationsEnabled by viewModel.notificationsEnabled.collectAsStateWithLifecycle()
     val countdownEnabled by viewModel.countdownEnabled.collectAsStateWithLifecycle()
     val selectedLanguage by viewModel.selectedLanguage.collectAsStateWithLifecycle()
+    var showReportProblemDialog by remember { mutableStateOf(false) }
 
     Column(
         modifier = modifier
@@ -243,6 +251,26 @@ fun SettingsScreen(
                     onClick = onNavigateToCustomerCenter,
                     testTag = "settings_customer_center_item"
                 )
+
+                SettingsDivider()
+
+                SettingsClickableItem(
+                    icon = Icons.Default.BugReport,
+                    title = "Report a Problem",
+                    subtitle = "Found a bug or issue? Tell our engineers",
+                    onClick = { showReportProblemDialog = true },
+                    testTag = "settings_report_problem_item"
+                )
+
+                SettingsDivider()
+
+                SettingsClickableItem(
+                    icon = Icons.Default.Star,
+                    title = "Rate for Us",
+                    subtitle = "Rate Holiday Wishes on Google Play ⭐",
+                    onClick = { RateAppManager.showRatingPromptExplicitly("Rate Holiday Wishes 🌟") },
+                    testTag = "settings_rate_for_us_item"
+                )
             }
         }
 
@@ -266,7 +294,7 @@ fun SettingsScreen(
                 SettingsClickableItem(
                     icon = Icons.Default.Info,
                     title = "About Holiday Wishes",
-                    subtitle = "Version 1.0.0",
+                    subtitle = "Version ${com.example.BuildConfig.VERSION_NAME}",
                     onClick = { viewModel.openDialog(SettingsDialogType.ABOUT) },
                     testTag = "settings_about"
                 )
@@ -318,6 +346,10 @@ fun SettingsScreen(
     }
 
     // Dialogs
+    if (showReportProblemDialog) {
+        ReportProblemDialog(onDismiss = { showReportProblemDialog = false })
+    }
+
     when (activeDialog) {
         SettingsDialogType.ABOUT -> {
             AlertDialog(
@@ -325,7 +357,7 @@ fun SettingsScreen(
                 title = { Text("About Holiday Wishes", fontWeight = FontWeight.Bold) },
                 text = {
                     Text(
-                        "Holiday Wishes is a native Android application designed to help you create, discover, save, and share heartfelt Christmas and New Year wishes and greeting cards with friends, family, and colleagues.\n\nVersion: 1.0.0\nBuilt natively with Kotlin & Jetpack Compose\nLocal Offline Storage: Room Database\nNative Android Share System"
+                        "Holiday Wishes is a native Android application designed to help you create, discover, save, and share heartfelt Christmas and New Year wishes and greeting cards with friends, family, and colleagues.\n\nVersion: ${com.example.BuildConfig.VERSION_NAME} (Build ${com.example.BuildConfig.VERSION_CODE})\nBuilt natively with Kotlin & Jetpack Compose\nLocal Offline Storage: Room Database\nNative Android Share System"
                     )
                 },
                 confirmButton = {

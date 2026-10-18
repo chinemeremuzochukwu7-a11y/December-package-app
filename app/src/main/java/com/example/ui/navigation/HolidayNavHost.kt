@@ -248,16 +248,24 @@ fun HolidayNavHost(
             )
         }
 
+        composable(Screen.SeasonEarnings.route) {
+            ExpensesTrackerScreen(initialTab = 0)
+        }
+
         composable(Screen.ExpensesTracker.route) {
-            ExpensesTrackerScreen()
+            ExpensesTrackerScreen(initialTab = 1)
         }
 
         composable(Screen.MealTracker.route) {
             MealTrackerScreen()
         }
 
+        composable(Screen.ScheduleDelivery.route) {
+            AlarmReminderScreen(initialTab = 2)
+        }
+
         composable(Screen.AlarmReminder.route) {
-            AlarmReminderScreen()
+            AlarmReminderScreen(initialTab = 0)
         }
     }
 }

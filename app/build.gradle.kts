@@ -17,8 +17,8 @@ android {
     applicationId = "com.geegroup.holidaywish"
     minSdk = 24
     targetSdk = 36
-    versionCode = 7
-    versionName = "1.6"
+    versionCode = 8
+    versionName = "1.7"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
@@ -117,6 +117,7 @@ dependencies {
   implementation(libs.retrofit)
   implementation(libs.android.billing.ktx)
   implementation(libs.play.services.ads)
+  implementation(libs.play.review)
   testImplementation(libs.androidx.compose.ui.test.junit4)
   testImplementation(libs.androidx.core)
   testImplementation(libs.androidx.junit)

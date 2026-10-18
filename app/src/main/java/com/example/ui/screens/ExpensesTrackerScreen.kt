@@ -82,17 +82,24 @@ import com.example.ui.theme.HolidayPineGreen
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
+import androidx.compose.runtime.mutableIntStateOf
+import java.util.Calendar
+import java.util.concurrent.TimeUnit
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ExpensesTrackerScreen(
+    initialTab: Int = 1,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val repository = remember { TrackersRepository(context) }
     val scope = rememberCoroutineScope()
 
+    var selectedScreenTab by remember(initialTab) { mutableIntStateOf(initialTab.coerceIn(0, 1)) }
     val allExpenses by repository.getAllExpenses().collectAsState(initial = emptyList())
     val totalSpentDouble by repository.getTotalSpent().collectAsState(initial = 0.0)
     val totalSpent = totalSpentDouble ?: 0.0
@@ -112,13 +119,15 @@ fun ExpensesTrackerScreen(
 
     Scaffold(
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = { showAddDialog = true },
-                containerColor = HolidayCrimson,
-                contentColor = Color.White,
-                modifier = Modifier.testTag("add_expense_fab")
-            ) {
-                Icon(imageVector = Icons.Default.Add, contentDescription = "Add Expense")
+            if (selectedScreenTab == 1) {
+                FloatingActionButton(
+                    onClick = { showAddDialog = true },
+                    containerColor = HolidayCrimson,
+                    contentColor = Color.White,
+                    modifier = Modifier.testTag("add_expense_fab")
+                ) {
+                    Icon(imageVector = Icons.Default.Add, contentDescription = "Add Expense")
+                }
             }
         },
         modifier = modifier.fillMaxSize()
@@ -128,7 +137,38 @@ fun ExpensesTrackerScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            // Budget & Total Banner
+            // Tab Row: Season Earning Tracker vs Expenses Tracker
+            TabRow(
+                selectedTabIndex = selectedScreenTab,
+                containerColor = MaterialTheme.colorScheme.surface,
+                contentColor = HolidayCrimson
+            ) {
+                Tab(
+                    selected = selectedScreenTab == 0,
+                    onClick = { selectedScreenTab = 0 },
+                    text = {
+                        Text(
+                            text = "Season Earning Tracker",
+                            fontWeight = if (selectedScreenTab == 0) FontWeight.Bold else FontWeight.Medium
+                        )
+                    }
+                )
+                Tab(
+                    selected = selectedScreenTab == 1,
+                    onClick = { selectedScreenTab = 1 },
+                    text = {
+                        Text(
+                            text = "Expenses Tracker",
+                            fontWeight = if (selectedScreenTab == 1) FontWeight.Bold else FontWeight.Medium
+                        )
+                    }
+                )
+            }
+
+            if (selectedScreenTab == 0) {
+                SeasonEarningsView(totalSpent = totalSpent)
+            } else {
+                // Budget & Total Banner
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -352,6 +392,7 @@ fun ExpensesTrackerScreen(
                         )
                     }
                 }
+            }
             }
         }
     }
@@ -663,6 +704,204 @@ private fun CategorySpendingSummaryBadge(
                         color = MaterialTheme.colorScheme.onSurface
                     )
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SeasonEarningsView(
+    totalSpent: Double,
+    modifier: Modifier = Modifier
+) {
+    var seasonEarningsInput by remember { mutableStateOf("2500") }
+    var holidayBudgetInput by remember { mutableStateOf("800") }
+
+    val earnings = seasonEarningsInput.toDoubleOrNull() ?: 0.0
+    val budget = holidayBudgetInput.toDoubleOrNull() ?: 0.0
+    val actualExpenses = totalSpent
+    val projectedSavings = earnings - budget
+    val actualNetProfit = earnings - actualExpenses
+
+    val calendar = Calendar.getInstance()
+    val today = calendar.timeInMillis
+    val endOfYearCalendar = Calendar.getInstance().apply {
+        set(Calendar.MONTH, Calendar.DECEMBER)
+        set(Calendar.DAY_OF_MONTH, 31)
+        set(Calendar.HOUR_OF_DAY, 23)
+        set(Calendar.MINUTE, 59)
+    }
+    val diffMillis = (endOfYearCalendar.timeInMillis - today).coerceAtLeast(0L)
+    val daysRemaining = (TimeUnit.MILLISECONDS.toDays(diffMillis) + 1).coerceAtLeast(1)
+    val dailyPacing = if (daysRemaining > 0 && actualNetProfit > 0) actualNetProfit / daysRemaining else 0.0
+
+    LazyColumn(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp),
+        contentPadding = PaddingValues(vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.Transparent)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(
+                            brush = Brush.horizontalGradient(
+                                colors = listOf(Color(0xFF0F381E), Color(0xFF1B5E20), Color(0xFFD4AF37))
+                            )
+                        )
+                        .padding(20.dp)
+                ) {
+                    Column {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text(
+                                    text = "Season Earnings & Goals",
+                                    style = MaterialTheme.typography.titleMedium.copy(
+                                        color = Color.White.copy(alpha = 0.9f)
+                                    )
+                                )
+                                Text(
+                                    text = String.format(Locale.US, "$%.2f", earnings),
+                                    style = MaterialTheme.typography.headlineMedium.copy(
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = Color.White
+                                    )
+                                )
+                            }
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = Color.White.copy(alpha = 0.25f)
+                            ) {
+                                Text(
+                                    text = "$daysRemaining days left",
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 12.sp,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        val progress = if (earnings > 0) (actualNetProfit / earnings).toFloat().coerceIn(0f, 1f) else 0f
+                        LinearProgressIndicator(
+                            progress = { progress },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(8.dp)
+                                .clip(RoundedCornerShape(4.dp)),
+                            color = HolidayGold,
+                            trackColor = Color.White.copy(alpha = 0.3f),
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = String.format(Locale.US, "Net Profit: $%.2f", actualNetProfit),
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    color = if (actualNetProfit >= 0) Color.White else Color(0xFFFF8A80),
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            )
+                            Text(
+                                text = String.format(Locale.US, "Daily Pacing: $%.2f/day", dailyPacing),
+                                style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.85f))
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "Customize Seasonal Goals",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = seasonEarningsInput,
+                            onValueChange = { seasonEarningsInput = it.filter { ch -> ch.isDigit() || ch == '.' } },
+                            label = { Text("Target Earnings ($)") },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+
+                        OutlinedTextField(
+                            value = holidayBudgetInput,
+                            onValueChange = { holidayBudgetInput = it.filter { ch -> ch.isDigit() || ch == '.' } },
+                            label = { Text("Budget Cap ($)") },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                    }
+
+                    Text(
+                        text = "Projected net profit after holiday season: ${String.format(Locale.US, "$%.2f", projectedSavings)}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = HolidayPineGreen,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+        }
+
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        text = "💡 Seasonal Earning Tips",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "• Set milestone goals for festive side gigs and craft sales.\n• Allocate at least 30% of seasonal income toward savings before year end.\n• Keep expenses logged in the Expenses Tracker tab to prevent budget surprises.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
     }

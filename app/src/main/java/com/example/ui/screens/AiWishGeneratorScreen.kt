@@ -98,6 +98,7 @@ import com.example.model.AiLanguage
 import com.example.model.AiOccasion
 import com.example.model.AiRecipient
 import com.example.model.AiTone
+import com.example.model.AiWishLength
 import com.example.model.AiWishResponse
 import com.example.ui.theme.HolidayCrimson
 import com.example.ui.theme.HolidayGold
@@ -119,6 +120,7 @@ fun AiWishGeneratorScreen(
     val tone by viewModel.aiTone.collectAsStateWithLifecycle()
     val language by viewModel.aiLanguage.collectAsStateWithLifecycle()
     val personalDetails by viewModel.aiPersonalDetails.collectAsStateWithLifecycle()
+    val wishLength by viewModel.aiWishLength.collectAsStateWithLifecycle()
     val isGenerating by viewModel.aiIsGenerating.collectAsStateWithLifecycle()
     val generatedResult by viewModel.aiGeneratedResult.collectAsStateWithLifecycle()
     val errorMessage by viewModel.aiErrorMessage.collectAsStateWithLifecycle()
@@ -133,10 +135,11 @@ fun AiWishGeneratorScreen(
     val activity = context as? Activity
 
     val onPerformGenerateWish = {
+        val calculatedCost = wishLength.creditCost
         if (isPro) {
             viewModel.generateAiWish()
         } else {
-            if (credits < SubscriptionManager.WISH_CREATION_CREDIT_COST) {
+            if (credits < calculatedCost) {
                 showCreditDialog = true
             } else {
                 // Free user before start creating must watch rewarded ads
@@ -145,7 +148,7 @@ fun AiWishGeneratorScreen(
                         activity = activity,
                         onRewardEarned = { /* +1 credit earned */ },
                         onDismiss = {
-                            if (SubscriptionManager.useCredits(SubscriptionManager.WISH_CREATION_CREDIT_COST)) {
+                            if (SubscriptionManager.useCredits(calculatedCost)) {
                                 viewModel.generateAiWish()
                             } else {
                                 showCreditDialog = true
@@ -153,7 +156,7 @@ fun AiWishGeneratorScreen(
                         }
                     )
                 } else {
-                    if (SubscriptionManager.useCredits(SubscriptionManager.WISH_CREATION_CREDIT_COST)) {
+                    if (SubscriptionManager.useCredits(calculatedCost)) {
                         viewModel.generateAiWish()
                     } else {
                         showCreditDialog = true
@@ -164,6 +167,7 @@ fun AiWishGeneratorScreen(
     }
 
     if (showCreditDialog) {
+        val calculatedCost = wishLength.creditCost
         AlertDialog(
             onDismissRequest = { showCreditDialog = false },
             title = {
@@ -176,11 +180,11 @@ fun AiWishGeneratorScreen(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        "Creating a wish requires ${SubscriptionManager.WISH_CREATION_CREDIT_COST} credits. You currently have $credits credits in Firestore.",
+                        "Creating a ${wishLength.displayName} wish (${wishLength.wordRange}) requires $calculatedCost credits. You currently have $credits credits in Firestore.",
                         style = MaterialTheme.typography.bodyMedium
                     )
                     Text(
-                        "Please upgrade to Holiday Wishes Pro for UNLIMITED AI generations, or watch a rewarded video to earn credits!",
+                        "Upgrade to Holiday Wishes Pro for unlimited instant AI generation with zero credit deductions, or watch a rewarded video to earn credits!",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -250,7 +254,7 @@ fun AiWishGeneratorScreen(
                 Text(
                     text = if (isPro) {
                         if (credits >= 99999) "PRO Unlimited AI Wishes (Yearly)" else "Pro Active • $credits Credits ($9.99/mo)"
-                    } else "10 Credits/Wish • Balance: $credits",
+                    } else "Cost: ${wishLength.creditCost} Credits (${wishLength.wordRange}) • Balance: $credits",
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface,
@@ -332,7 +336,10 @@ fun AiWishGeneratorScreen(
                 recipientName = recipientName,
                 tone = tone,
                 language = language,
+                wishLength = wishLength,
                 personalDetails = personalDetails,
+                credits = credits,
+                isPro = isPro,
                 isGenerating = isGenerating,
                 generatedResult = generatedResult,
                 errorMessage = errorMessage,
@@ -341,6 +348,7 @@ fun AiWishGeneratorScreen(
                 onRecipientNameChange = { viewModel.setAiRecipientName(it) },
                 onToneChange = { viewModel.setAiTone(it) },
                 onLanguageChange = { viewModel.setAiLanguage(it) },
+                onLengthChange = { viewModel.setAiWishLength(it) },
                 onPersonalDetailsChange = { viewModel.setAiPersonalDetails(it) },
                 onGenerateWish = onPerformGenerateWish,
                 onGenerateAgain = onPerformGenerateWish,
@@ -372,7 +380,10 @@ private fun AiGeneratorContent(
     recipientName: String,
     tone: AiTone,
     language: AiLanguage,
+    wishLength: AiWishLength,
     personalDetails: String,
+    credits: Int,
+    isPro: Boolean,
     isGenerating: Boolean,
     generatedResult: AiWishResponse?,
     errorMessage: String?,
@@ -381,6 +392,7 @@ private fun AiGeneratorContent(
     onRecipientNameChange: (String) -> Unit,
     onToneChange: (AiTone) -> Unit,
     onLanguageChange: (AiLanguage) -> Unit,
+    onLengthChange: (AiWishLength) -> Unit,
     onPersonalDetailsChange: (String) -> Unit,
     onGenerateWish: () -> Unit,
     onGenerateAgain: () -> Unit,
@@ -560,6 +572,75 @@ private fun AiGeneratorContent(
             }
         }
 
+        // Section: Length & Word Count (Live Credit Calculation)
+        item {
+            Spacer(modifier = Modifier.height(14.dp))
+            SectionTitle(title = "Length & Word Count", subtitle = "Select wish length — credits calculated live before creation")
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                AiWishLength.values().forEach { len ->
+                    val isSelected = len == wishLength
+                    FilterChip(
+                        selected = isSelected,
+                        onClick = { onLengthChange(len) },
+                        label = {
+                            Column(modifier = Modifier.padding(vertical = 2.dp)) {
+                                Text(
+                                    text = "${len.displayName} (${len.creditCost} 🪙)",
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                    fontSize = 12.5.sp
+                                )
+                                Text(
+                                    text = len.wordRange,
+                                    fontSize = 10.sp,
+                                    color = if (isSelected) Color.White.copy(alpha = 0.85f) else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        },
+                        shape = RoundedCornerShape(14.dp),
+                        colors = chipColors(isSelected),
+                        modifier = Modifier.testTag("ai_length_${len.name.lowercase()}")
+                    )
+                }
+            }
+
+            // Live Credit Calculation Card
+            Spacer(modifier = Modifier.height(8.dp))
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = HolidayGold.copy(alpha = 0.12f),
+                border = BorderStroke(1.dp, HolidayGold.copy(alpha = 0.4f)),
+                modifier = Modifier.fillMaxWidth().testTag("credit_calculation_card")
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("⚡", fontSize = 16.sp)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Live Credit Calculation & Deduction",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "• Selected Length: ${wishLength.displayName} (${wishLength.wordRange})\n" +
+                               "• Required Credits: ${wishLength.creditCost} Credits (deducted upon generation)\n" +
+                               "• Current Balance: $credits Credits\n" +
+                               "• Balance After Generation: ${if (isPro) "Unlimited (Pro Active 👑)" else "${maxOf(0, credits - wishLength.creditCost)} Credits"}",
+                        fontSize = 11.5.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        lineHeight = 17.sp
+                    )
+                }
+            }
+        }
+
         // Section: Personal details
         item {
             Spacer(modifier = Modifier.height(14.dp))
@@ -656,8 +737,8 @@ private fun AiGeneratorContent(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "✨ Generate Wish",
-                        fontSize = 16.sp,
+                        text = "✨ Generate Wish (${wishLength.creditCost} Credits • ${wishLength.wordRange})",
+                        fontSize = 15.sp,
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -670,6 +751,7 @@ private fun AiGeneratorContent(
                 Spacer(modifier = Modifier.height(28.dp))
                 GeneratedResultCard(
                     result = generatedResult,
+                    wishLength = wishLength,
                     isGenerating = isGenerating,
                     onGenerateAgain = onGenerateAgain,
                     onSaveWish = onSaveWish,
@@ -683,6 +765,7 @@ private fun AiGeneratorContent(
 @Composable
 private fun GeneratedResultCard(
     result: AiWishResponse,
+    wishLength: AiWishLength,
     isGenerating: Boolean,
     onGenerateAgain: () -> Unit,
     onSaveWish: (String, String) -> Unit,
@@ -943,7 +1026,7 @@ private fun GeneratedResultCard(
                     ) {
                         Icon(imageVector = Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Again", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        Text("Again (${wishLength.creditCost} 🪙)", fontWeight = FontWeight.Bold, fontSize = 12.sp)
                     }
                 }
             }

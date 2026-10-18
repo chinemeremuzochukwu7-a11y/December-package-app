@@ -89,7 +89,22 @@ fun ScheduleGreetingDialog(
 
     var recipientName by remember { mutableStateOf(initialRecipientName.ifBlank { "Loved One" }) }
     var phoneNumber by remember { mutableStateOf("") }
-    var selectedPlatform by remember { mutableStateOf("WhatsApp") } // "WhatsApp" or "Other Media"
+    var emailAddress by remember { mutableStateOf("") }
+    var selectedPlatform by remember { mutableStateOf("WhatsApp") }
+
+    val platformOptions = remember {
+        listOf(
+            Triple("WhatsApp", "💬 WhatsApp", "Direct chat or WhatsApp contact"),
+            Triple("Telegram", "✈️ Telegram", "Telegram messaging"),
+            Triple("Instagram", "📸 Instagram", "Direct message / Story"),
+            Triple("Messenger", "📘 Messenger", "Facebook Messenger"),
+            Triple("Twitter", "🐦 X (Twitter)", "Post or direct message"),
+            Triple("SMS", "✉️ SMS Messages", "Native cellular messaging"),
+            Triple("Email", "📧 Email / Gmail", "Holiday email greetings"),
+            Triple("Snapchat", "👻 Snapchat", "Snapchat share"),
+            Triple("Other Apps", "📤 Other Apps", "All installed social media & apps")
+        )
+    }
 
     // Target Calendar (defaults to tomorrow 9:00 AM or 1 hour from now)
     val now = Calendar.getInstance()
@@ -165,7 +180,7 @@ fun ScheduleGreetingDialog(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                // 1. Recipient Details
+                // 1. Recipient Details & Platform
                 Card(
                     shape = RoundedCornerShape(14.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
@@ -189,57 +204,87 @@ fun ScheduleGreetingDialog(
 
                         // Platform Selector
                         Text(
-                            text = "Send via Platform:",
+                            text = "Select Send Platform:",
                             style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.SemiBold
+                            fontWeight = FontWeight.Bold
                         )
+                        Text(
+                            text = "Choose which app will deliver your scheduled holiday greeting",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        // Multi-platform chips row (horizontal scrollable)
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            FilterChip(
-                                selected = selectedPlatform == "WhatsApp",
-                                onClick = { selectedPlatform = "WhatsApp" },
-                                label = { Text("💬 WhatsApp") },
-                                leadingIcon = if (selectedPlatform == "WhatsApp") {
-                                    { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
-                                } else null,
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = HolidayPineGreen.copy(alpha = 0.2f),
-                                    selectedLabelColor = HolidayPineGreen
-                                ),
-                                modifier = Modifier.weight(1f)
-                            )
-
-                            FilterChip(
-                                selected = selectedPlatform == "Other Media",
-                                onClick = { selectedPlatform = "Other Media" },
-                                label = { Text("📤 Other Apps / SMS") },
-                                leadingIcon = if (selectedPlatform == "Other Media") {
-                                    { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
-                                } else null,
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = HolidayGold.copy(alpha = 0.2f),
-                                    selectedLabelColor = Color(0xFF523B00)
-                                ),
-                                modifier = Modifier.weight(1f)
-                            )
+                            platformOptions.forEach { (platId, platLabel, platDesc) ->
+                                val isSelected = selectedPlatform == platId
+                                FilterChip(
+                                    selected = isSelected,
+                                    onClick = { selectedPlatform = platId },
+                                    label = { Text(platLabel, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) },
+                                    leadingIcon = if (isSelected) {
+                                        { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                                    } else null,
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = if (platId == "WhatsApp") HolidayPineGreen.copy(alpha = 0.25f) else HolidayCrimson.copy(alpha = 0.2f),
+                                        selectedLabelColor = if (platId == "WhatsApp") HolidayPineGreen else HolidayCrimson
+                                    ),
+                                    modifier = Modifier.testTag("platform_chip_${platId.lowercase()}")
+                                )
+                            }
                         }
 
-                        if (selectedPlatform == "WhatsApp") {
-                            OutlinedTextField(
-                                value = phoneNumber,
-                                onValueChange = { phoneNumber = it },
-                                label = { Text("Recipient WhatsApp Number (Optional)") },
-                                placeholder = { Text("+1 234 567 8900 (or leave empty)") },
-                                leadingIcon = {
-                                    Icon(imageVector = Icons.Default.Phone, contentDescription = null, tint = HolidayPineGreen)
-                                },
-                                singleLine = true,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .testTag("schedule_phone_input")
-                            )
+                        // Target-specific contact inputs
+                        when (selectedPlatform) {
+                            "WhatsApp", "SMS", "Telegram" -> {
+                                OutlinedTextField(
+                                    value = phoneNumber,
+                                    onValueChange = { phoneNumber = it },
+                                    label = { Text(if (selectedPlatform == "WhatsApp") "Recipient WhatsApp Number (Optional)" else "Recipient Mobile / Phone Number") },
+                                    placeholder = { Text("+1 234 567 8900 (or leave empty)") },
+                                    leadingIcon = {
+                                        Icon(imageVector = Icons.Default.Phone, contentDescription = null, tint = HolidayPineGreen)
+                                    },
+                                    singleLine = true,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .testTag("schedule_phone_input")
+                                )
+                            }
+                            "Email" -> {
+                                OutlinedTextField(
+                                    value = emailAddress,
+                                    onValueChange = { emailAddress = it },
+                                    label = { Text("Recipient Email Address (Optional)") },
+                                    placeholder = { Text("friend@example.com") },
+                                    leadingIcon = {
+                                        Icon(imageVector = Icons.Default.Send, contentDescription = null, tint = HolidayCrimson)
+                                    },
+                                    singleLine = true,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .testTag("schedule_email_input")
+                                )
+                            }
+                            else -> {
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = MaterialTheme.colorScheme.surface,
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                                ) {
+                                    Text(
+                                        text = "✨ When the scheduled time arrives, you'll receive a high-priority prompt to send directly via $selectedPlatform.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(10.dp)
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -398,10 +443,11 @@ fun ScheduleGreetingDialog(
             Button(
                 onClick = {
                     val epochMillis = targetCalendar.timeInMillis
+                    val contactInfo = if (selectedPlatform == "Email") emailAddress.trim() else phoneNumber.trim()
                     val entity = ScheduledGreetingEntity(
                         title = greetingTitle,
                         recipientName = recipientName.ifBlank { "Holiday Friend" },
-                        recipientPhone = phoneNumber.trim(),
+                        recipientPhone = contactInfo,
                         messageText = messageText,
                         cardTitle = greetingTitle,
                         cardImagePath = cardImagePath,
@@ -416,7 +462,7 @@ fun ScheduleGreetingDialog(
                         ScheduledGreetingScheduler(context).schedule(fullEntity)
 
                         withContext(Dispatchers.Main) {
-                            val formattedTime = "${dateFormatter.format(targetCalendar.time)} at ${timeFormatter.format(targetCalendar.time)}"
+                            val formattedTime = "${dateFormatter.format(targetCalendar.time)} at ${timeFormatter.format(targetCalendar.time)} via $selectedPlatform"
                             onScheduledSuccess(formattedTime)
                             onDismiss()
                         }
@@ -428,7 +474,7 @@ fun ScheduleGreetingDialog(
             ) {
                 Icon(Icons.Default.Send, contentDescription = null, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(6.dp))
-                Text("Schedule Auto-Send", fontWeight = FontWeight.Bold)
+                Text("Schedule via $selectedPlatform", fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {

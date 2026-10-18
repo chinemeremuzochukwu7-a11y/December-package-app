@@ -82,19 +82,17 @@ class TrackersRepository(private val context: Context) {
 
     suspend fun saveBirthday(birthday: BirthdayEntity): Long {
         val id = birthdayDao.insertBirthday(birthday)
-        val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
-        if (user != null) {
-            try {
-                val bDate = "${birthday.birthMonth}/${birthday.birthDay}${if (birthday.birthYear != null) "/${birthday.birthYear}" else ""}"
-                com.example.data.firebase.FirestoreTrackersRepository(context).saveBirthday(
-                    userId = user.uid,
-                    name = birthday.name,
-                    birthDate = bDate,
-                    relationship = birthday.relationship,
-                    notes = birthday.notes
-                )
-            } catch (_: Exception) {}
-        }
+        val userId = com.example.data.firebase.UserFirestoreRepository.getOrCreateUserId(context)
+        try {
+            val bDate = "${birthday.birthMonth}/${birthday.birthDay}${if (birthday.birthYear != null) "/${birthday.birthYear}" else ""}"
+            com.example.data.firebase.FirestoreTrackersRepository(context).saveBirthday(
+                userId = userId,
+                name = birthday.name,
+                birthDate = bDate,
+                relationship = birthday.relationship,
+                notes = birthday.notes
+            )
+        } catch (_: Exception) {}
         return id
     }
 
@@ -111,19 +109,17 @@ class TrackersRepository(private val context: Context) {
 
     suspend fun saveExpense(expense: ExpenseEntity): Long {
         val id = expenseDao.insertExpense(expense)
-        val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
-        if (user != null) {
-            try {
-                val dateStr = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date(expense.dateEpoch))
-                com.example.data.firebase.FirestoreTrackersRepository(context).saveExpense(
-                    userId = user.uid,
-                    title = expense.title,
-                    amount = expense.amount,
-                    category = expense.category,
-                    date = dateStr
-                )
-            } catch (_: Exception) {}
-        }
+        val userId = com.example.data.firebase.UserFirestoreRepository.getOrCreateUserId(context)
+        try {
+            val dateStr = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date(expense.dateEpoch))
+            com.example.data.firebase.FirestoreTrackersRepository(context).saveExpense(
+                userId = userId,
+                title = expense.title,
+                amount = expense.amount,
+                category = expense.category,
+                date = dateStr
+            )
+        } catch (_: Exception) {}
         return id
     }
 
@@ -138,18 +134,16 @@ class TrackersRepository(private val context: Context) {
 
     suspend fun saveMeal(meal: MealEntity): Long {
         val id = mealDao.insertMeal(meal)
-        val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
-        if (user != null) {
-            try {
-                com.example.data.firebase.FirestoreTrackersRepository(context).saveMeal(
-                    userId = user.uid,
-                    mealType = meal.mealType,
-                    title = meal.foodName,
-                    recipe = meal.notes,
-                    date = meal.dateString
-                )
-            } catch (_: Exception) {}
-        }
+        val userId = com.example.data.firebase.UserFirestoreRepository.getOrCreateUserId(context)
+        try {
+            com.example.data.firebase.FirestoreTrackersRepository(context).saveMeal(
+                userId = userId,
+                mealType = meal.mealType,
+                title = meal.foodName,
+                recipe = meal.notes,
+                date = meal.dateString
+            )
+        } catch (_: Exception) {}
         return id
     }
 

@@ -319,7 +319,7 @@ fun CustomizeCardScreen(
                         style = MaterialTheme.typography.bodyMedium
                     )
                     Text(
-                        "You can also schedule it right now to automatically deliver on WhatsApp or other media at any exact time & date!",
+                        "You can also schedule it right now to automatically deliver on WhatsApp, Telegram, Instagram, SMS, Email, or other platforms at any exact time & date!",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -358,7 +358,7 @@ fun CustomizeCardScreen(
             onScheduledSuccess = { formattedDateTime ->
                 Toast.makeText(
                     context,
-                    "Greeting scheduled for $formattedDateTime! 🚀 You will receive a high-priority prompt to send on WhatsApp when the time arrives.",
+                    "Greeting scheduled for $formattedDateTime! 🚀 You will receive a high-priority prompt to send when the time arrives.",
                     Toast.LENGTH_LONG
                 ).show()
             }
@@ -779,7 +779,7 @@ fun CustomizeCardScreen(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Schedule Auto-Send (WhatsApp / Media)",
+                            text = "Schedule Auto-Send (WhatsApp / Media / Apps)",
                             color = HolidayCrimson,
                             fontWeight = FontWeight.Bold,
                             fontSize = 13.sp
@@ -881,9 +881,9 @@ fun CustomizeCardScreen(
                                         label = {
                                             Column {
                                                 Text(
-                                                    lengthOption.label,
+                                                    "${lengthOption.label} (${lengthOption.tokensRequired}🪙)",
                                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                                    fontSize = 12.sp
+                                                    fontSize = 11.5.sp
                                                 )
                                                 Text(
                                                     lengthOption.approxWords,
@@ -897,6 +897,37 @@ fun CustomizeCardScreen(
                                             selectedContainerColor = HolidayCrimson,
                                             selectedLabelColor = Color.White
                                         )
+                                    )
+                                }
+                            }
+
+                            // Live Credit Calculation Card
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = HolidayGold.copy(alpha = 0.15f),
+                                border = BorderStroke(1.dp, HolidayGold.copy(alpha = 0.45f)),
+                                modifier = Modifier.fillMaxWidth().testTag("card_credit_calculation_box")
+                            ) {
+                                Column(modifier = Modifier.padding(10.dp)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text("⚡", fontSize = 15.sp)
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = "Live Credit Calculation & Deduction",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 12.5.sp,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = "• Selected: ${selectedTextLength.label} (${selectedTextLength.approxWords})\n" +
+                                               "• Required: ${selectedTextLength.tokensRequired} Tokens 🪙 (deducted upon creation)\n" +
+                                               "• Current Balance: $credits Credits\n" +
+                                               "• Balance After Generation: ${if (isPro) "Unlimited (Pro Active 👑)" else "${maxOf(0, credits - selectedTextLength.tokensRequired)} Credits"}",
+                                        fontSize = 11.5.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        lineHeight = 16.sp
                                     )
                                 }
                             }
@@ -1313,6 +1344,7 @@ private fun saveCardImageToGallery(
 
     if (success) {
         Toast.makeText(context, "Card downloaded to device gallery! 📥✨", Toast.LENGTH_LONG).show()
+        com.example.utils.RateAppManager.triggerMagicEvent(context, "✨ Magical Card Saved!")
         onSuccess?.invoke(cachedPath)
     } else {
         Toast.makeText(context, "Failed to save card to gallery", Toast.LENGTH_SHORT).show()
@@ -1347,12 +1379,14 @@ private fun shareCardAction(
         }
     }
     CardImageExporter.shareCardImage(context, bitmap, templateTitle, shareText)
+    com.example.utils.RateAppManager.triggerMagicEvent(context, "✨ Magical Card Shared!")
 }
 
 enum class CardTextLength(val label: String, val approxWords: String, val tokensRequired: Int) {
     SHORT("Short", "15-25 words", 5),
     MEDIUM("Medium", "40-60 words", 10),
-    LONG("Long", "80-120 words", 15)
+    LONG("Long", "80-120 words", 15),
+    POETIC("Poetic", "130-180 words", 20)
 }
 
 private fun generateCardMessage(
@@ -1399,6 +1433,16 @@ private fun generateCardMessage(
                     "Warmest seasonal greetings to you and yours, $name! The holiday season is a beautiful reminder to pause, count our blessings, and celebrate the gift of shared friendship and family. May your days be wrapped in cozy sweaters, sweet cinnamon treats, and heartwarming conversations. May the glow of the holidays guide your steps with peace, harmony, and joy all winter long."
                 else ->
                     "Warmest seasonal greetings to you and yours, $name! The holiday season is a beautiful reminder to pause, count our blessings, and celebrate the gift of shared friendship and family. May your days be wrapped in cozy sweaters, sweet cinnamon treats, and heartwarming conversations. May the glow of the holidays guide your steps with peace, harmony, and joy all winter long."
+            }
+        }
+        CardTextLength.POETIC -> {
+            when (occasion) {
+                CardOccasion.CHRISTMAS ->
+                    "Dearest $name, like constellations glowing softly through winter skies, may Christmas wrap your home in celestial grace and wonder. May peace descend upon your family like pure white snow, filling every chamber with warmth, divine blessings, and enduring laughter. May the timeless symphony of love and goodwill resonate through all your festive days."
+                CardOccasion.NEW_YEAR ->
+                    "To dearest $name: As the old year turns its final page, may the dawn of the New Year arrive like golden sunlight over quiet mountains. May health, profound triumph, and boundless happiness rise up to meet you at every sunrise. Cherish the journey and step forward into a year overflowing with peace, divine favor, and radiant beauty."
+                else ->
+                    "Dearest $name, may the magic of this holiday season unfold like a rich tapestry of golden wonders. May cozy evenings by the fireplace, joyful reunions with loved ones, and sweet reflections of gratitude bring immense delight to your soul. Wishing you boundless peace and triumphant joy all winter long."
             }
         }
     }

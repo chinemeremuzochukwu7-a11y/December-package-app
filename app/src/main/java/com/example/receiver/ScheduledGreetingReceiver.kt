@@ -30,6 +30,7 @@ class ScheduledGreetingReceiver : BroadcastReceiver() {
         const val CHANNEL_ID = "scheduled_greetings_channel"
         const val ACTION_TRIGGER_GREETING = "com.example.ACTION_TRIGGER_SCHEDULED_GREETING"
         const val ACTION_DIRECT_WHATSAPP = "com.example.ACTION_DIRECT_WHATSAPP_SEND"
+        const val ACTION_DIRECT_PLATFORM_SEND = "com.example.ACTION_DIRECT_PLATFORM_SEND"
         const val ACTION_DISMISS = "com.example.ACTION_DISMISS_GREETING"
 
         const val EXTRA_GREETING_ID = "extra_greeting_id"
@@ -49,6 +50,7 @@ class ScheduledGreetingReceiver : BroadcastReceiver() {
         val recipientPhone = intent.getStringExtra(EXTRA_RECIPIENT_PHONE).orEmpty()
         val messageText = intent.getStringExtra(EXTRA_MESSAGE_TEXT).orEmpty()
         val cardImagePath = intent.getStringExtra(EXTRA_CARD_IMAGE_PATH)
+        val targetPlatform = intent.getStringExtra(EXTRA_TARGET_PLATFORM) ?: "WhatsApp"
 
         if (action == ACTION_DISMISS) {
             val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -56,13 +58,27 @@ class ScheduledGreetingReceiver : BroadcastReceiver() {
             return
         }
 
-        if (action == ACTION_DIRECT_WHATSAPP) {
+        if (action == ACTION_DIRECT_WHATSAPP || action == ACTION_DIRECT_PLATFORM_SEND) {
             // Dismiss notification first
             val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             notificationManager.cancel(greetingId.toInt())
 
-            // Launch WhatsApp
-            launchWhatsAppDirect(context, messageText, recipientPhone, cardImagePath)
+            // Launch platform directly
+            var imageUri: Uri? = null
+            if (cardImagePath != null) {
+                val file = File(cardImagePath)
+                if (file.exists()) {
+                    imageUri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+                }
+            }
+
+            com.example.utils.WishExporter.sendToPlatform(
+                context = context,
+                platform = targetPlatform,
+                message = messageText,
+                phoneNumber = recipientPhone,
+                imageUri = imageUri
+            )
             return
         }
 
@@ -113,19 +129,20 @@ class ScheduledGreetingReceiver : BroadcastReceiver() {
             }
         } catch (ignored: Exception) {}
 
-        // Prepare Action 1: Direct WhatsApp send PendingIntent
-        val whatsAppIntent = Intent(context, ScheduledGreetingReceiver::class.java).apply {
-            this.action = ACTION_DIRECT_WHATSAPP
+        // Prepare Action 1: Direct Send via scheduled platform PendingIntent
+        val directSendIntent = Intent(context, ScheduledGreetingReceiver::class.java).apply {
+            this.action = ACTION_DIRECT_PLATFORM_SEND
             putExtra(EXTRA_GREETING_ID, greetingId)
             putExtra(EXTRA_RECIPIENT_NAME, recipientName)
             putExtra(EXTRA_RECIPIENT_PHONE, recipientPhone)
             putExtra(EXTRA_MESSAGE_TEXT, messageText)
             putExtra(EXTRA_CARD_IMAGE_PATH, cardImagePath)
+            putExtra(EXTRA_TARGET_PLATFORM, targetPlatform)
         }
-        val whatsAppPendingIntent = PendingIntent.getBroadcast(
+        val directPendingIntent = PendingIntent.getBroadcast(
             context,
             (greetingId + 1000).toInt(),
-            whatsAppIntent,
+            directSendIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
@@ -176,18 +193,20 @@ class ScheduledGreetingReceiver : BroadcastReceiver() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        val platformActionLabel = "🚀 Send on $targetPlatform"
+
         val notificationBuilder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_menu_send)
-            .setContentTitle("⏰ Time to Send Holiday Greeting to $recipientName! 🎄")
+            .setContentTitle("⏰ Time to Send Greeting to $recipientName! 🎄")
             .setContentText(messageText.take(120))
-            .setStyle(NotificationCompat.BigTextStyle().bigText("Recipient: $recipientName\n\n$messageText"))
+            .setStyle(NotificationCompat.BigTextStyle().bigText("To: $recipientName (via $targetPlatform)\n\n$messageText"))
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setAutoCancel(true)
             .setContentIntent(contentPendingIntent)
-            .addAction(android.R.drawable.ic_dialog_email, "🚀 Send on WhatsApp", whatsAppPendingIntent)
-            .addAction(android.R.drawable.ic_menu_share, "📤 Share via Media", sharePendingIntent)
+            .addAction(android.R.drawable.ic_dialog_email, platformActionLabel, directPendingIntent)
+            .addAction(android.R.drawable.ic_menu_share, "📤 Share via Apps", sharePendingIntent)
             .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Dismiss", dismissPendingIntent)
 
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager

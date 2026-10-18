@@ -21,16 +21,14 @@ import androidx.navigation.compose.rememberNavController
 import com.example.ui.components.HolidayNavigationDrawer
 import com.example.ui.components.HolidayTopAppBar
 import com.example.ui.components.NotificationPermissionPrompt
+import com.example.ui.components.MagicRatingDialog
 import com.example.ui.navigation.HolidayBottomBar
 import com.example.ui.navigation.HolidayNavHost
 import com.example.ui.navigation.Screen
 import com.example.ui.theme.HolidayWishesTheme
 import com.example.ui.viewmodel.HolidayViewModel
 import androidx.compose.runtime.LaunchedEffect
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.example.data.firebase.FirestoreManager
 import com.example.data.firebase.UserFirestoreRepository
-import com.example.ui.auth.AuthScreen
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -39,14 +37,9 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             HolidayWishesTheme {
-                val currentUser by FirestoreManager.authStateFlow().collectAsStateWithLifecycle(initialValue = FirestoreManager.currentUser)
-                val user = currentUser
-
-                if (user == null) {
-                    AuthScreen(onSignInSuccess = { /* auto-updates via authStateFlow */ })
-                } else {
-                    HolidayWishesApp(currentUserId = user.uid)
-                }
+                val context = androidx.compose.ui.platform.LocalContext.current
+                val userId = androidx.compose.runtime.remember { UserFirestoreRepository.getOrCreateUserId(context) }
+                HolidayWishesApp(currentUserId = userId)
             }
         }
     }
@@ -59,15 +52,12 @@ fun HolidayWishesApp(
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
 
-    // Synchronize user profile & initial 25 credits with Firestore on login
+    // Synchronize user profile & initial 25 credits with Firestore on app open
     LaunchedEffect(currentUserId) {
         if (currentUserId.isNotBlank()) {
-            val user = FirestoreManager.currentUser
-            if (user != null) {
-                val repo = UserFirestoreRepository(context)
-                repo.ensureUserInitialized(user)
-                repo.observeUserProfile(user.uid).collect { /* updates SubscriptionManager */ }
-            }
+            val repo = UserFirestoreRepository(context)
+            repo.ensureUserInitialized(currentUserId)
+            repo.observeUserProfile(currentUserId).collect { /* updates SubscriptionManager */ }
         }
     }
     val navController = rememberNavController()
@@ -91,21 +81,23 @@ fun HolidayWishesApp(
 
     val title = when (currentRoute) {
         Screen.Home.route -> "Holiday Wishes"
-        Screen.Wishes.route -> "Wishes Collection"
-        Screen.CreateWish.route -> "AI Wish Generator"
-        Screen.AiWishGenerator.route -> "AI Wish Generator"
-        Screen.BirthdayTracker.route -> "Birthday Tracker"
-        Screen.ExpensesTracker.route -> "Expenses Tracker"
-        Screen.MealTracker.route -> "Daily Meal Tracker"
-        Screen.AlarmReminder.route -> "Alarms & Reminders"
+        Screen.Wishes.route -> "Wishes library"
+        Screen.CreateWish.route -> "Ai wish generator"
+        Screen.AiWishGenerator.route -> "Ai wish generator"
+        Screen.BirthdayTracker.route -> "Birthday tracker and countdown"
+        Screen.SeasonEarnings.route -> "Season earning tracker"
+        Screen.ExpensesTracker.route -> "Expenses tracker"
+        Screen.MealTracker.route -> "Daily meal tracker"
+        Screen.ScheduleDelivery.route -> "Schedule delivery"
+        Screen.AlarmReminder.route -> "Alarm and reminder"
         Screen.AiHistory.route -> "My AI Wishes"
-        Screen.Cards.route -> "Holiday Cards"
-        Screen.CustomizeCard.route -> "Card Creator"
-        Screen.MyCards.route -> "My Saved Cards"
-        Screen.Favorites.route -> "Saved Favorites"
-        Screen.Settings.route -> "Settings"
+        Screen.Cards.route -> "Card library"
+        Screen.CustomizeCard.route -> "Template"
+        Screen.MyCards.route -> "Save cards and wishes"
+        Screen.Favorites.route -> "Save cards and wishes"
+        Screen.Settings.route -> "Settings & Preferences"
         Screen.ProSubscription.route -> "Holiday Wishes Pro"
-        Screen.CustomerCenter.route -> "Customer Center"
+        Screen.CustomerCenter.route -> "Customer Support"
         else -> "Holiday Wishes"
     }
 
@@ -122,13 +114,25 @@ fun HolidayWishesApp(
                 currentRoute = currentRoute,
                 onNavigateToRoute = { route ->
                     scope.launch { drawerState.close() }
-                    com.example.ui.navigation.AdNavigationHelper.navigateWithSectionAdCheck(context, route) {
-                        navController.navigate(route) {
-                            popUpTo(navController.graph.startDestinationId) {
-                                saveState = true
+                    if (route == Screen.Home.route) {
+                        val popped = navController.popBackStack(Screen.Home.route, inclusive = false)
+                        if (!popped) {
+                            navController.navigate(Screen.Home.route) {
+                                popUpTo(navController.graph.startDestinationId) {
+                                    inclusive = false
+                                }
+                                launchSingleTop = true
                             }
-                            launchSingleTop = true
-                            restoreState = true
+                        }
+                    } else {
+                        com.example.ui.navigation.AdNavigationHelper.navigateWithSectionAdCheck(context, route) {
+                            navController.navigate(route) {
+                                popUpTo(navController.graph.startDestinationId) {
+                                    saveState = true
+                                }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
                         }
                     }
                 }
@@ -156,13 +160,25 @@ fun HolidayWishesApp(
                 HolidayBottomBar(
                     currentRoute = currentRoute,
                     onNavigateToRoute = { route ->
-                        com.example.ui.navigation.AdNavigationHelper.navigateWithSectionAdCheck(context, route) {
-                            navController.navigate(route) {
-                                popUpTo(navController.graph.startDestinationId) {
-                                    saveState = true
+                        if (route == Screen.Home.route) {
+                            val popped = navController.popBackStack(Screen.Home.route, inclusive = false)
+                            if (!popped) {
+                                navController.navigate(Screen.Home.route) {
+                                    popUpTo(navController.graph.startDestinationId) {
+                                        inclusive = false
+                                    }
+                                    launchSingleTop = true
                                 }
-                                launchSingleTop = true
-                                restoreState = true
+                            }
+                        } else {
+                            com.example.ui.navigation.AdNavigationHelper.navigateWithSectionAdCheck(context, route) {
+                                navController.navigate(route) {
+                                    popUpTo(navController.graph.startDestinationId) {
+                                        saveState = true
+                                    }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
                             }
                         }
                     }
@@ -174,6 +190,7 @@ fun HolidayWishesApp(
                 viewModel = viewModel,
                 modifier = Modifier.padding(innerPadding)
             )
+            MagicRatingDialog()
         }
     }
 }

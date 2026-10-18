@@ -139,6 +139,20 @@ sealed class Screen(
         selectedIcon = Icons.Filled.Settings,
         unselectedIcon = Icons.Outlined.Settings
     )
+
+    object SeasonEarnings : Screen(
+        route = "season_earnings",
+        title = "Season Earning Tracker",
+        selectedIcon = Icons.Filled.AttachMoney,
+        unselectedIcon = Icons.Outlined.AttachMoney
+    )
+
+    object ScheduleDelivery : Screen(
+        route = "schedule_delivery",
+        title = "Schedule Delivery",
+        selectedIcon = Icons.Filled.Alarm,
+        unselectedIcon = Icons.Outlined.Alarm
+    )
 }
 
 // Bottom nav items: Home, Templates (1000+), AI Wishes, Schedule, Birthdays

@@ -52,6 +52,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
+import androidx.compose.runtime.mutableIntStateOf
+import com.example.data.local.FavoriteWishEntity
+import com.example.utils.ClipboardHelper
+import com.example.utils.ShareHelper
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -79,6 +89,8 @@ fun MyCardsScreen(
 ) {
     val context = LocalContext.current
     val savedCards by viewModel.savedCards.collectAsStateWithLifecycle()
+    val favoriteWishes by viewModel.favorites.collectAsStateWithLifecycle()
+    var selectedTab by remember { mutableIntStateOf(0) }
 
     var cardToDelete by remember { mutableStateOf<SavedCardEntity?>(null) }
     var activeViewRef by remember { mutableStateOf<View?>(null) }
@@ -125,31 +137,44 @@ fun MyCardsScreen(
                 }
 
                 Text(
-                    text = "My Saved Cards",
+                    text = "Save cards and wishes",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f)
                 )
-
-                if (savedCards.isNotEmpty()) {
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = HolidayCrimson.copy(alpha = 0.15f),
-                        modifier = Modifier.padding(end = 8.dp)
-                    ) {
-                        Text(
-                            text = "${savedCards.size} Saved",
-                            color = HolidayCrimson,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 12.sp,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                        )
-                    }
-                }
             }
         }
 
-        // Empty state or List of Saved Cards
+        // Tab Row: Saved Cards vs Saved Wishes
+        TabRow(
+            selectedTabIndex = selectedTab,
+            containerColor = MaterialTheme.colorScheme.surface,
+            contentColor = HolidayCrimson
+        ) {
+            Tab(
+                selected = selectedTab == 0,
+                onClick = { selectedTab = 0 },
+                text = {
+                    Text(
+                        text = "Saved Cards (${savedCards.size})",
+                        fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Medium
+                    )
+                }
+            )
+            Tab(
+                selected = selectedTab == 1,
+                onClick = { selectedTab = 1 },
+                text = {
+                    Text(
+                        text = "Saved Wishes (${favoriteWishes.size})",
+                        fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Medium
+                    )
+                }
+            )
+        }
+
+        if (selectedTab == 0) {
+            // Empty state or List of Saved Cards
         if (savedCards.isEmpty()) {
             Box(
                 modifier = Modifier
@@ -253,6 +278,138 @@ fun MyCardsScreen(
                             cardToDelete = cardEntity
                         }
                     )
+                }
+            }
+        }
+        } else {
+            // Saved Wishes view
+            if (favoriteWishes.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(32.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Surface(
+                            shape = CircleShape,
+                            color = HolidayGold.copy(alpha = 0.2f),
+                            modifier = Modifier.size(88.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.Favorite,
+                                    contentDescription = null,
+                                    tint = HolidayCrimson,
+                                    modifier = Modifier.size(44.dp)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(20.dp))
+
+                        Text(
+                            text = "No saved wishes yet.",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onBackground,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Text(
+                            text = "Tap the heart icon on any wish in the Wishes Library or AI Wish Generator to save it here for offline access.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                    }
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 96.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    items(favoriteWishes, key = { it.id }) { wish ->
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
+                                    ) {
+                                        Text(
+                                            text = wish.category,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                        )
+                                    }
+
+                                    IconButton(
+                                        onClick = {
+                                            viewModel.removeFavoriteById(wish.id)
+                                            Toast.makeText(context, "Wish removed from saved", Toast.LENGTH_SHORT).show()
+                                        },
+                                        modifier = Modifier.size(32.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.DeleteOutline,
+                                            contentDescription = "Remove favorite",
+                                            tint = HolidayCrimson,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(10.dp))
+
+                                Text(
+                                    text = wish.text,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.End
+                                ) {
+                                    IconButton(
+                                        onClick = {
+                                            ClipboardHelper.copyText(context, wish.text)
+                                            Toast.makeText(context, "Wish copied to clipboard! 📋", Toast.LENGTH_SHORT).show()
+                                        }
+                                    ) {
+                                        Icon(Icons.Default.ContentCopy, contentDescription = "Copy")
+                                    }
+                                    IconButton(
+                                        onClick = {
+                                            ShareHelper.shareWish(context, wish.text, "Holiday Wish")
+                                        }
+                                    ) {
+                                        Icon(Icons.Default.Share, contentDescription = "Share")
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
