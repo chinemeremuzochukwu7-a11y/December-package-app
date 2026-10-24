@@ -4,10 +4,14 @@ import com.example.model.AiLanguage
 import com.example.model.AiOccasion
 import com.example.model.AiRecipient
 import com.example.model.AiTone
+import com.example.model.AiWishLength
 import com.example.model.AiWishRequest
 import com.example.model.AiWishResponse
+import com.example.model.CardOccasion
+import com.example.model.WishCategory
 import kotlinx.coroutines.delay
 import java.util.UUID
+import kotlin.math.abs
 
 /**
  * High-fidelity offline mock implementation of [AiWishRepository].
@@ -198,6 +202,16 @@ class MockAiWishRepository : AiWishRepository {
                     "May the birth of Christ bring deep peace to your soul, divine light to your home, and abundant grace to your family this Christmas.",
                     "Praying that God's gentle presence and boundless love enfold you this sacred season and throughout the coming year.",
                     "May the true meaning of Christmas fill your heart with holiness, reverence, and unconditional love from above."
+                )[seed]
+                AiTone.POETIC -> listOf(
+                    "Beneath the starlit winter sky, where silent wonders gently lie, may quiet peace and starry light illuminate your holy night.",
+                    "The snow falls softly like a prayer, whispers of hope throughout the air. May Christmas bring its tender grace to every corner of your place.",
+                    "A winter rose upon the snow, a fireside with amber glow; wishing you wonder, love, and grace in this enchanting holiday space."
+                )[seed]
+                else -> listOf(
+                    "Merry Christmas! May your home be filled with joy, peace, and warmth this holiday season.",
+                    "Wishing you a season filled with peace, joy, and cherished moments with those you love.",
+                    "May the spirit of Christmas bring you and your family happiness and harmony throughout the year."
                 )[seed]
             }
 
@@ -395,5 +409,293 @@ class MockAiWishRepository : AiWishRepository {
                 "Que a esperança e o afeto sejam seus companheiros fiéis em cada instante desta jornada."
             )[seed]
         }
+    }
+
+    override suspend fun generateCardGreeting(
+        occasion: CardOccasion,
+        recipientName: String,
+        senderName: String,
+        tone: AiTone,
+        length: AiWishLength,
+        customPrompt: String,
+        seed: Long
+    ): String {
+        delay(350)
+        val name = if (recipientName.isNotBlank()) recipientName.trim() else "friend"
+        val idx = (abs(seed) % 5).toInt()
+
+        val coreGreetings = when (occasion) {
+            CardOccasion.CHRISTMAS -> when (tone) {
+                AiTone.WARM -> listOf(
+                    "Wishing you a cozy fireside Christmas filled with peaceful light, sweet laughter, and the warmest memories with family, $name.",
+                    "May the wonder and tranquil beauty of Christmas illuminate your home with joy and abundance, dearest $name.",
+                    "May your Christmas tree sparkle with hope, and your days be filled with comfort, delight, and true serenity, $name.",
+                    "Sending you heartfelt Christmas blessings wrapped in cozy warmth, serene joy, and good cheer, $name.",
+                    "May peace, kindness, and boundless festive happiness surround your days this Christmas, $name!"
+                )
+                AiTone.LOVING -> listOf(
+                    "Dearest $name, having you in my life is the greatest Christmas blessing. May your holiday season sparkle with tender affection and sweetest joy.",
+                    "My heart is full of gratitude and love for you this Christmas, $name. May every moment bring warmth to your soul.",
+                    "To my dearest $name, you make every season magical. Wishing you an enchanting Christmas surrounded by love.",
+                    "Sending my endless love and warmest hugs across the miles this Christmas, $name. You mean the world to me.",
+                    "May the quiet magic of Christmas remind you how deeply treasured and loved you are, dearest $name."
+                )
+                AiTone.POETIC -> listOf(
+                    "Like snowflakes falling gently upon winter pine, may peace descend upon your heart this Christmas, $name, illuminating every day with golden wonder.",
+                    "As constellations glow through sacred winter skies, may Christmas wrap your home in celestial grace, laughter, and timeless goodwill, $name.",
+                    "May the symphony of carols and flickering holiday lights weave a tapestry of pure delight and serenity for you, $name.",
+                    "Beneath the starlit canopy of this sacred night, may your days be blessed with harmony, radiant wonder, and eternal peace, $name.",
+                    "May the quiet poetry of winter whisper gladness to your soul and fill your cup with celestial light, $name."
+                )
+                AiTone.FUNNY -> listOf(
+                    "Merry Christmas, $name! May your eggnog be sweet, your treats be plentiful, and your holiday shopping bills magically disappear!",
+                    "Happy Holidays, $name! Here is to good food, stretchy pants, long naps, and zero awkward family conversations!",
+                    "Wishing you a Christmas so merry that Santa himself gets jealous of your festive snacks, $name!",
+                    "May your Christmas be bright, and may none of your gifts require complicated assembly, $name!",
+                    "Cheers to another year of surviving holiday chaos with style, cookies, and holiday movies, $name!"
+                )
+                AiTone.INSPIRATIONAL -> listOf(
+                    "May the light of Christmas renew your spirit, kindle bold dreams in your heart, and guide your steps toward victory, $name.",
+                    "Every candle lit this Christmas is a symbol of faith and triumphs ahead. Step fearlessly into your greatest chapter, $name.",
+                    "May this season remind you of the extraordinary resilience, generosity, and goodness you bring into the world, $name.",
+                    "Wishing you unshakeable hope, vibrant energy, and triumphant joy this Christmas and beyond, $name.",
+                    "May the sacred spirit of this holiday inspire you to reach higher and shine brighter than ever before, $name."
+                )
+                AiTone.PRAYERFUL -> listOf(
+                    "May the birth of our Savior fill your home with divine grace, heavenly peace, and everlasting salvation, $name.",
+                    "Praying that God's gentle hand protects you and showers your family with abundant blessings this holy Christmas, $name.",
+                    "May the true meaning of Christmas bring sacred joy, quiet reassurance, and holiness to your heart, $name.",
+                    "May God's favor surround you like a shield, and His peace guard your footsteps through every festive day, $name.",
+                    "Wishing you a Christmas sanctified by divine love, eternal hope, and spiritual renewal, $name."
+                )
+                AiTone.PROFESSIONAL -> listOf(
+                    "Season's greetings, $name. Wishing you and your team a restful, joyous holiday season and continued success.",
+                    "Warmest holiday wishes to you, $name. Thank you for your partnership and dedication throughout this memorable year.",
+                    "May your holidays be relaxing and rewarding, $name. Looking forward to accomplishing great things together ahead.",
+                    "Wishing you peace, prosperity, and joyous celebrations with family this Christmas, $name.",
+                    "With appreciation for our collaboration, we wish you a delightful holiday season and a fruitful new chapter, $name."
+                )
+                AiTone.SHORT -> listOf(
+                    "Merry Christmas, $name! Wishing you peace, laughter, and abundant festive cheer.",
+                    "Warmest Christmas blessings to you and your loved ones, $name!",
+                    "Wishing you a cozy, joyful Christmas filled with love and treats, $name!",
+                    "Happy Holidays, $name! May your days be merry and bright.",
+                    "Peace, joy, and sweetest holiday greetings to you, $name!"
+                )
+                AiTone.EMOTIONAL -> listOf(
+                    "Christmas always makes me reflect on what truly matters, and having you in my life is at the top of that list, $name.",
+                    "Through every chapter of life, your warmth and kindness have been my guiding comfort. Thank you, dearest $name.",
+                    "May this Christmas bring you the same deep peace and gentleness that you so effortlessly give to others, $name.",
+                    "I am holding you in my heart this holiday season with profound gratitude for our bond, $name.",
+                    "You make the world softer and brighter just by being you. Merry Christmas with all my heart, $name."
+                )
+                else -> listOf(
+                    "Wishing you a cozy fireside Christmas filled with peaceful light, sweet laughter, and the warmest memories, $name.",
+                    "May peace, kindness, and boundless festive happiness surround your days this Christmas, $name!",
+                    "Merry Christmas, $name! Wishing you peace, laughter, and abundant festive cheer."
+                )
+            }
+            CardOccasion.NEW_YEAR -> when (tone) {
+                AiTone.WARM -> listOf(
+                    "Happy New Year, $name! May 2027 open brilliant doors of vibrant health, smiling days, and wonderful surprises for you.",
+                    "Cheers to 365 fresh chances to celebrate life, pursue dreams, and cherish friendship, $name!",
+                    "May the New Year unfold like a golden dawn, bringing you peace, prosperity, and abundant happiness, $name.",
+                    "Wishing you laughter in every morning, triumph in every challenge, and contentment in every sunset, $name.",
+                    "May your coming year be filled with exciting new adventures and cozy, treasured moments, $name!"
+                )
+                AiTone.LOVING -> listOf(
+                    "Happy New Year, my sweetest $name. Loving you is my favorite joy, and I cannot wait to share 2027 with you.",
+                    "To dearest $name: May the coming year be our brightest, tenderest, and happiest journey yet.",
+                    "Wishing the one who holds my heart a magnificent New Year overflowing with affection and delight, $name.",
+                    "Every new year with you is a treasure. May 2027 bring you every happiness your beautiful heart desires, $name.",
+                    "Holding your hand as the calendar turns is the sweetest blessing of all. Happy New Year, $name!"
+                )
+                AiTone.POETIC -> listOf(
+                    "As the old year turns its final page, may the dawn of 2027 arrive like sunlight over calm winter seas, $name.",
+                    "May health, profound triumph, and boundless beauty rise up to greet you at every sunrise of the New Year, $name.",
+                    "Step forward into the unfolding tapestry of the New Year with faith, grace, and an open heart, $name.",
+                    "May the stars align in your favor, casting golden light on every path you tread in 2027, $name.",
+                    "Let the whispers of the New Year carry promises of renewed peace, celestial wonder, and timeless joy, $name."
+                )
+                AiTone.FUNNY -> listOf(
+                    "Happy New Year, $name! May your resolutions last at least longer than your leftover holiday pie!",
+                    "Cheers to 2027, $name! 365 new opportunities to pretend we're fully functional adults!",
+                    "May all your troubles last as long as my January diet motivation, $name! Happy New Year!",
+                    "New Year, same glorious troublemaker! Excited to make questionable life choices together in 2027, $name!",
+                    "Here is to another year of hilarious inside jokes, midnight snacks, and great memories, $name!"
+                )
+                AiTone.INSPIRATIONAL -> listOf(
+                    "May 2027 awaken your boldest ambitions, $name. You carry the power, wisdom, and brilliance to conquer new heights.",
+                    "Write an extraordinary masterpiece on the blank pages ahead. Step into your greatness, $name!",
+                    "Leave yesterday's doubts behind. The New Year belongs to those who believe in the beauty of their dreams, $name.",
+                    "May every challenge in 2027 become a stepping stone to your greatest triumphs and breakthroughs, $name.",
+                    "Boldly embrace the limitless potential waiting for you in the New Year. The world is yours, $name!"
+                )
+                AiTone.PRAYERFUL -> listOf(
+                    "May God bless your footsteps in 2027 with divine direction, robust health, and abundant favor, $name.",
+                    "Entrusting your New Year to the Almighty. May His mercy guide your decisions and His peace guard your home, $name.",
+                    "Praying that 2027 showers you with heavenly grace, spiritual elevation, and fruitful harvests in every endeavor, $name.",
+                    "May the Lord walk ahead of you in the coming year, leveling mountains and opening doors of blessing, $name.",
+                    "May you experience God's boundless goodness and unconditional love every single day of 2027, $name."
+                )
+                AiTone.PROFESSIONAL -> listOf(
+                    "Happy New Year, $name. Wishing you and your organization continued innovation, prosperity, and standout achievements.",
+                    "May the New Year bring rewarding endeavors, strategic growth, and exciting milestones to your team, $name.",
+                    "With sincere appreciation for our professional collaboration, we wish you a prosperous and successful 2027, $name.",
+                    "Wishing you a productive, energizing New Year filled with notable career triumphs and well-being, $name.",
+                    "Here is to another year of fruitful partnership, shared victories, and breakthrough results, $name."
+                )
+                AiTone.SHORT -> listOf(
+                    "Happy New Year, $name! Wishing you vibrant health, grand success, and endless joy in 2027.",
+                    "Cheers to 2027, $name! May it be your finest and happiest year yet.",
+                    "Wishing you 365 days of prosperity, good smiles, and great adventures, $name!",
+                    "Happy 2027, $name! Step boldly into this exciting new chapter.",
+                    "Brightest New Year greetings to you and your loved ones, $name!"
+                )
+                AiTone.EMOTIONAL -> listOf(
+                    "As we step into 2027, I am so grateful for the moments we shared and the unconditional warmth you give, $name.",
+                    "You have been an anchor of strength and kindness through every season. Wishing you the happiest New Year, $name.",
+                    "May the coming year heal any past hurts and fill every day with the comforting gentleness you deserve, $name.",
+                    "Thinking of you as the year turns, with immense love and boundless gratitude for our bond, $name.",
+                    "May 2027 be kind, generous, and loving to you in every single way, dearest $name."
+                )
+                else -> listOf(
+                    "Happy New Year, $name! May 2027 open brilliant doors of vibrant health, smiling days, and wonderful surprises for you.",
+                    "Wishing you laughter in every morning, triumph in every challenge, and contentment in every sunset, $name.",
+                    "Cheers to 2027, $name! May it be your finest and happiest year yet."
+                )
+            }
+            CardOccasion.HOLIDAY_SEASON -> when (tone) {
+                AiTone.POETIC -> listOf(
+                    "As winter casts its quiet spell, may seasonal joy embrace your home with peaceful light and golden serenity, $name.",
+                    "May the frosty winds outside carry only warmth, comfort, and harmonious grace into your hearth, $name.",
+                    "Like stars reflecting upon silver ice, may this festive season sparkle with enchanting wonders for you, $name.",
+                    "May the gentle cadence of winter melodies soothe your heart and inspire your festive days, $name.",
+                    "Wishing you tranquil twilight hours, heartwarming conversations, and the timeless poetry of winter, $name."
+                )
+                AiTone.LOVING -> listOf(
+                    "Sending you all my love and warmest seasonal embraces, dearest $name. You make every winter season special.",
+                    "May this holiday season bring you as much joy, warmth, and comfort as you bring into my world, $name.",
+                    "To dearest $name, thinking of you with pure affection and wishing you the sweetest holiday season.",
+                    "You are the brightest light in my winter days, $name. Wishing you a season overflowing with love.",
+                    "No matter how cold the winter gets, your friendship keeps my heart delightfully warm, $name!"
+                )
+                AiTone.FUNNY -> listOf(
+                    "Happy Holiday Season, $name! May your coffee be hot, your blankets be fuzzy, and your holiday spirit be unstoppable!",
+                    "Winter greetings, $name! Time to hibernate under warm blankets with good snacks until spring!",
+                    "Sending you warm winter vibes and an abundance of festive sweet treats, $name!",
+                    "May your holiday season be free of traffic, long lines, and cold toes, $name!",
+                    "Cheers to cozy sweaters, holiday lights, and zero obligations to leave the couch, $name!"
+                )
+                else -> listOf(
+                    "Sending warmest holiday season greetings to you and your family, $name! May your days be wrapped in peace.",
+                    "May this festive season surround your home with sweet cheer, restorative rest, and happy laughter, $name.",
+                    "Wishing you a serene and joyous winter season filled with cozy moments and dear companionship, $name.",
+                    "May the beauty of the holidays illuminate your path with hope, vibrant health, and delightful memories, $name.",
+                    "Warmest seasonal wishes, $name! May this festive period bring peace and renewed energy to your soul."
+                )
+            }
+        }
+
+        val baseMessage = coreGreetings[idx % coreGreetings.size]
+
+        val bodyWithLength = when (length) {
+            AiWishLength.SHORT -> baseMessage
+            AiWishLength.MEDIUM -> baseMessage + " May each moment bring comfort to your soul and smiles to your face."
+            AiWishLength.LONG -> baseMessage + " As the holidays unfold, may your home be a sanctuary of love, abundant health, and generous laughter. Cherish every memory and let joyful moments guide you forward."
+            AiWishLength.POETIC -> baseMessage + "\n\nMay peace descend upon your family like pure white snow, filling every chamber with warmth, divine blessings, and enduring laughter throughout the festive days ahead."
+        }
+
+        val bodyWithPrompt = if (customPrompt.isNotBlank()) {
+            "$bodyWithLength\n\n\"${customPrompt.trim()}\""
+        } else {
+            bodyWithLength
+        }
+
+        return if (senderName.isNotBlank()) {
+            "$bodyWithPrompt\n\nWarmly,\n${senderName.trim()}"
+        } else {
+            bodyWithPrompt
+        }
+    }
+
+    override suspend fun regenerateWishText(
+        category: WishCategory,
+        currentText: String,
+        seed: Long
+    ): String {
+        delay(250)
+        val pool = when (category) {
+            WishCategory.CHRISTMAS -> listOf(
+                "May the wonder and cozy warmth of Christmas illuminate your heart, bringing tranquil peace to your soul and boundless cheer to your home! 🎄✨",
+                "Merry Christmas! Wishing you a season overflowing with fragrant pine, twinkling lights, delicious feasts, and the sweetest laughter with family.",
+                "May the quiet miracle of Christmas wrap your days in celestial comfort, healing grace, and enduring joy that lasts all year long. 🎅🎁",
+                "Sending you heartfelt holiday blessings! May your festive table be surrounded by love, true kindness, and cherished companionship.",
+                "Like fresh snow glistening in the morning sun, may your Christmas shine with pure happiness, radiant health, and gentle contentment.",
+                "Merry Christmas! May the timeless symphony of goodwill and peace on Earth echo through your home today and forever."
+            )
+            WishCategory.NEW_YEAR -> listOf(
+                "Happy New Year! May 2027 open magnificent doors of vibrant health, joyful breakthroughs, and extraordinary new opportunities for you! 🎉🥂",
+                "Cheers to 365 fresh pages waiting to be written with bold courage, laughter, true friendship, and abundant prosperity! 🎆",
+                "May the dawn of the New Year bring serene peace to your spirit, prosperity to your hands, and sweet delight to every day.",
+                "Happy 2027! Leave yesterday's worries behind and step fearlessly into your greatest, most rewarding chapter yet! ✨",
+                "Wishing you 12 months of success, 52 weeks of laughter, and 365 days of good fortune! Happy New Year!",
+                "May the coming year unfold like a wonderful story filled with kind friends, smiling faces, and unexpected triumphs."
+            )
+            WishCategory.FAMILY -> listOf(
+                "Family is the truest gift of the holidays. Thank you for being the warm heartbeat of our home and the anchor of our lives! 🏡❤️",
+                "No distance or time can ever dim the warmth of family. May this holiday season bless our home with peace, unity, and laughter.",
+                "To our wonderful family: through every season of life, your love and support mean everything to me. Wishing you joyful holidays!",
+                "May our festive dinner table be filled with sweet stories, fond memories, and the irreplaceable comfort of shared love.",
+                "Home is where love lives and memories are made. Wishing our precious family boundless joy and cozy moments together."
+            )
+            WishCategory.FRIENDS -> listOf(
+                "A true friend like you turns every season into a celebration. Thank you for walking beside me through thick and thin! 🤝✨",
+                "To the one who shares my laughs, supports my dreams, and knows my stories: wishing you the happiest, most festive holidays!",
+                "Cheers to friendship, holiday treats, late-night chats, and creating memories that will make us smile for decades to come!",
+                "So grateful for the gift of your friendship this holiday season. May your days be filled with happiness and sweet adventures!",
+                "Friendship is life's sweetest sparkle. Wishing you boundless joy, cozy evenings, and all the festive snacks you can handle!"
+            )
+            WishCategory.LOVE -> listOf(
+                "You are my favorite holiday miracle, my cozy shelter, and my greatest blessing. Wishing you a season as beautiful as your heart! ❤️🎄",
+                "Every holiday moment is sweeter and brighter because I get to share it with you. I love you more with every passing day.",
+                "Having your hand to hold as the snow falls is all the gift I'll ever need. Happy holidays to the love of my life! 💖",
+                "No present under the tree could ever compare to your love. May your holidays be wrapped in tender romance and pure bliss.",
+                "You bring magic into my world every single day. Wishing you an enchanting holiday season filled with all my love."
+            )
+            WishCategory.BIRTHDAY -> listOf(
+                "Happy Birthday! May this milestone year bring you flourishing health, radiant happiness, and the realization of your deepest dreams! 🎂🎉",
+                "Celebrate today knowing how deeply appreciated and admired you are by everyone around you! May your day be sprinkled with joy and cake!",
+                "Wishing you 365 new days filled with laughter, triumphant victories, and sweet surprises. Have the happiest birthday yet!",
+                "May your special day be wrapped in warm hugs, genuine smiles, and all the love you so generously give to others. Happy Birthday!"
+            )
+            WishCategory.RELIGIOUS -> listOf(
+                "May the sacred peace of God which surpasses all human understanding guard your heart and mind in divine joy and grace! ✝️🕊️",
+                "Praying that God's loving presence enfolds your family with holy blessings, unwavering faith, and spiritual renewal this season.",
+                "May the true light of Christ illuminate your path with righteousness, comforting hope, and everlasting salvation.",
+                "May God's favor surround you like a shield, and may His mercies be fresh and abundant in your life each morning."
+            )
+            WishCategory.THANK_YOU -> listOf(
+                "From the bottom of my heart, thank you for your immense kindness, generosity, and thoughtful support. You made a world of difference! 🙏✨",
+                "Words cannot express how grateful I am for your presence and help. Your generosity will always be remembered and treasured.",
+                "Thank you for being someone I can always rely upon. Your thoughtfulness brought so much light and relief to my life!"
+            )
+            WishCategory.BUSINESS -> listOf(
+                "Season's greetings! Thank you for your valuable partnership, collaboration, and trust. Wishing you continued prosperity and success! 💼📈",
+                "We appreciate our shared achievements this year and look forward to reaching even greater milestones together in the season ahead.",
+                "Wishing you, your colleagues, and your organization peace, good health, and outstanding achievements throughout the coming year."
+            )
+            else -> listOf(
+                "May the gentle spirit of the holiday season fill your home with radiant warmth, serene peace, and happy smiles! ✨🎄",
+                "Sending you warm thoughts, sunny moments, and positive energy for a truly wonderful and fulfilling festive season.",
+                "May your days be brightened by sweet unexpected joys, kind encounters, and countless reasons to celebrate life!",
+                "Wishing you peace of mind, healthy vitality, and gentle contentment in everything you do this holiday season!"
+            )
+        }
+
+        val available = pool.filter { it.trim() != currentText.trim() }
+        val choices = if (available.isNotEmpty()) available else pool
+        val selectedIndex = (abs(seed) % choices.size).toInt()
+        return choices[selectedIndex]
     }
 }

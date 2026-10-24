@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Favorite
@@ -44,6 +45,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.local.FavoriteWishEntity
 import com.example.ui.theme.HolidayCrimson
+import com.example.ui.theme.HolidayGold
 import com.example.ui.viewmodel.HolidayViewModel
 import com.example.utils.ClipboardHelper
 import com.example.utils.ShareHelper
@@ -161,7 +163,10 @@ fun FavoritesScreen(
                             favorite = item,
                             onRemove = { viewModel.removeFavoriteById(item.id) },
                             onCopy = { ClipboardHelper.copyText(context, item.text) },
-                            onShare = { ShareHelper.shareWish(context, item.text, "Holiday Wish") }
+                            onShare = { ShareHelper.shareWish(context, item.text, "Holiday Wish") },
+                            onRegenerate = {
+                                viewModel.regenerateFavoriteWishWithAi(item.id)
+                            }
                         )
                     }
                 }
@@ -175,8 +180,10 @@ private fun FavoriteItemCard(
     favorite: FavoriteWishEntity,
     onRemove: () -> Unit,
     onCopy: () -> Unit,
-    onShare: () -> Unit
+    onShare: () -> Unit,
+    onRegenerate: () -> Unit
 ) {
+    val context = LocalContext.current
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -233,24 +240,57 @@ private fun FavoriteItemCard(
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = onCopy, modifier = Modifier.size(36.dp)) {
-                    Icon(
-                        imageVector = Icons.Default.ContentCopy,
-                        contentDescription = "Copy",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(18.dp)
-                    )
+                Surface(
+                    onClick = {
+                        onRegenerate()
+                        android.widget.Toast.makeText(context, "Regenerated wish with AI! ✨", android.widget.Toast.LENGTH_SHORT).show()
+                    },
+                    shape = RoundedCornerShape(10.dp),
+                    color = HolidayGold.copy(alpha = 0.16f),
+                    border = BorderStroke(1.dp, HolidayGold.copy(alpha = 0.5f)),
+                    modifier = Modifier.testTag("regenerate_favorite_${favorite.id}")
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AutoAwesome,
+                            contentDescription = "Regenerate with AI",
+                            tint = HolidayGold,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "AI Regenerate",
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = HolidayGold
+                        )
+                    }
                 }
 
-                IconButton(onClick = onShare, modifier = Modifier.size(36.dp)) {
-                    Icon(
-                        imageVector = Icons.Default.Share,
-                        contentDescription = "Share",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(18.dp)
-                    )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = onCopy, modifier = Modifier.size(36.dp)) {
+                        Icon(
+                            imageVector = Icons.Default.ContentCopy,
+                            contentDescription = "Copy",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+
+                    IconButton(onClick = onShare, modifier = Modifier.size(36.dp)) {
+                        Icon(
+                            imageVector = Icons.Default.Share,
+                            contentDescription = "Share",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                 }
             }
         }

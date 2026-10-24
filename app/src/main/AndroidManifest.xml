@@ -32,12 +32,18 @@
         <!-- AdMob Sample App ID (can be replaced with user's real AdMob App ID) -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="ca-app-pub-3940256099942544~3347511713"/>
+            android:value="ca-app-pub-6322953088287505~8340287269"/>
         <meta-data
             android:name="com.google.android.gms.ads.flag.OPTIMIZE_INITIALIZATION"
             android:value="true"/>
         <meta-data
             android:name="com.google.android.gms.ads.flag.OPTIMIZE_AD_LOADING"
+            android:value="true"/>
+        <meta-data
+            android:name="com.google.android.gms.ads.flag.AD_SERVICES_MEASUREMENT_ENABLED"
+            android:value="false"/>
+        <meta-data
+            android:name="com.google.android.gms.ads.DELAY_APP_MEASUREMENT_INIT"
             android:value="true"/>
 
         <property

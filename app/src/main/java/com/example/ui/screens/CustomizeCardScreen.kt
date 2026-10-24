@@ -49,6 +49,8 @@ import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material3.AlertDialog
+import com.example.model.AiTone
+import com.example.model.AiWishLength
 import com.example.model.CardTemplate
 import com.example.model.CardOccasion
 import com.example.ui.components.ScheduleGreetingDialog
@@ -97,6 +99,7 @@ import com.example.ui.theme.HolidayGold
 import com.example.ui.theme.HolidayPineGreen
 import com.example.ui.viewmodel.HolidayViewModel
 import com.example.utils.CardImageExporter
+import com.example.utils.CardExportSize
 
 @Composable
 fun CustomizeCardScreen(
@@ -122,6 +125,10 @@ fun CustomizeCardScreen(
     var cardViewRef by remember { mutableStateOf<View?>(null) }
     var cardBounds by remember { mutableStateOf<Rect?>(null) }
     var selectedTextLength by remember { mutableStateOf(CardTextLength.MEDIUM) }
+    var selectedTone by remember { mutableStateOf(AiTone.WARM) }
+    var customAiPrompt by remember { mutableStateOf("") }
+    var showAiCustomPromptField by remember { mutableStateOf(false) }
+    val cardAiIsGenerating by viewModel.cardAiIsGenerating.collectAsStateWithLifecycle()
     var isFlipped by remember { mutableStateOf(false) }
     val flipAngle by animateFloatAsState(
         targetValue = if (isFlipped) 180f else 0f,
@@ -156,6 +163,8 @@ fun CustomizeCardScreen(
     var showProUpgradeDialog by remember { mutableStateOf(false) }
     var showScheduleDialog by remember { mutableStateOf(false) }
     var showDownloadSuccessDialog by remember { mutableStateOf(false) }
+    var showSelectCardSizeDialog by remember { mutableStateOf(false) }
+    var selectedExportSize by remember { mutableStateOf(CardExportSize.CLASSIC_GREETING) }
     var cachedImagePath by remember { mutableStateOf<String?>(null) }
     val activity = context as? Activity
 
@@ -189,22 +198,14 @@ fun CustomizeCardScreen(
     }
 
     val executeCardShare = {
-        if (isPro) {
-            shareCardAction(
-                context = context,
-                template = template,
-                templateTitle = template.title,
-                recipient = recipientName,
-                message = customMessage,
-                sender = senderName,
-                fontStyle = cardFontStyle
-            )
-        } else {
+        val isCardUnlocked = !template.isPro || isPro || viewModel.isCardUnlocked(template)
+        if (!isCardUnlocked) {
             if (activity != null) {
+                Toast.makeText(context, "Watch a short ad to unlock and share this Pro card! 🎁", Toast.LENGTH_SHORT).show()
                 AdManager.showRewardedAd(
                     activity = activity,
-                    onRewardEarned = { /* 1 credit added */ },
-                    onDismiss = {
+                    onRewardEarned = {
+                        viewModel.unlockCardViaRewardedAd(template.id)
                         shareCardAction(
                             context = context,
                             template = template,
@@ -212,11 +213,13 @@ fun CustomizeCardScreen(
                             recipient = recipientName,
                             message = customMessage,
                             sender = senderName,
-                            fontStyle = cardFontStyle
+                            fontStyle = cardFontStyle,
+                            photoUri = cardPhotoUri
                         )
                     }
                 )
             } else {
+                viewModel.unlockCardViaRewardedAd(template.id)
                 shareCardAction(
                     context = context,
                     template = template,
@@ -224,8 +227,52 @@ fun CustomizeCardScreen(
                     recipient = recipientName,
                     message = customMessage,
                     sender = senderName,
-                    fontStyle = cardFontStyle
+                    fontStyle = cardFontStyle,
+                    photoUri = cardPhotoUri
                 )
+            }
+        } else {
+            if (isPro) {
+                shareCardAction(
+                    context = context,
+                    template = template,
+                    templateTitle = template.title,
+                    recipient = recipientName,
+                    message = customMessage,
+                    sender = senderName,
+                    fontStyle = cardFontStyle,
+                    photoUri = cardPhotoUri
+                )
+            } else {
+                if (activity != null) {
+                    AdManager.showRewardedAd(
+                        activity = activity,
+                        onRewardEarned = { /* 1 credit added */ },
+                        onDismiss = {
+                            shareCardAction(
+                                context = context,
+                                template = template,
+                                templateTitle = template.title,
+                                recipient = recipientName,
+                                message = customMessage,
+                                sender = senderName,
+                                fontStyle = cardFontStyle,
+                                photoUri = cardPhotoUri
+                            )
+                        }
+                    )
+                } else {
+                    shareCardAction(
+                        context = context,
+                        template = template,
+                        templateTitle = template.title,
+                        recipient = recipientName,
+                        message = customMessage,
+                        sender = senderName,
+                        fontStyle = cardFontStyle,
+                        photoUri = cardPhotoUri
+                    )
+                }
             }
         }
     }
@@ -848,7 +895,7 @@ fun CustomizeCardScreen(
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
-                                        text = "AI Greeting Length",
+                                        text = "AI Card Assistant",
                                         style = MaterialTheme.typography.bodyMedium,
                                         fontWeight = FontWeight.Bold
                                     )
@@ -868,7 +915,13 @@ fun CustomizeCardScreen(
                                 }
                             }
 
-                            // Length selection chips
+                            // 1. Length selection chips
+                            Text(
+                                text = "Greeting Length:",
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -883,11 +936,11 @@ fun CustomizeCardScreen(
                                                 Text(
                                                     "${lengthOption.label} (${lengthOption.tokensRequired}🪙)",
                                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                                    fontSize = 11.5.sp
+                                                    fontSize = 11.sp
                                                 )
                                                 Text(
                                                     lengthOption.approxWords,
-                                                    fontSize = 9.sp,
+                                                    fontSize = 8.5.sp,
                                                     color = if (isSelected) Color.White.copy(alpha = 0.85f) else MaterialTheme.colorScheme.onSurfaceVariant
                                                 )
                                             }
@@ -899,6 +952,74 @@ fun CustomizeCardScreen(
                                         )
                                     )
                                 }
+                            }
+
+                            // 2. Tone selection chips
+                            Text(
+                                text = "Greeting Tone:",
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                val tones: List<Pair<AiTone, String>> = listOf(
+                                    AiTone.WARM to "Warm ❤️",
+                                    AiTone.LOVING to "Loving 💖",
+                                    AiTone.POETIC to "Poetic 📜",
+                                    AiTone.FUNNY to "Funny 😄",
+                                    AiTone.INSPIRATIONAL to "Inspiring 🌟",
+                                    AiTone.PRAYERFUL to "Blessed ✝️",
+                                    AiTone.PROFESSIONAL to "Formal 💼"
+                                )
+                                tones.forEach { (tone, label) ->
+                                    val isSelected = selectedTone == tone
+                                    FilterChip(
+                                        selected = isSelected,
+                                        onClick = { selectedTone = tone },
+                                        label = { Text(label, fontSize = 11.5.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) },
+                                        colors = FilterChipDefaults.filterChipColors(
+                                            selectedContainerColor = HolidayGold,
+                                            selectedLabelColor = Color(0xFF332200)
+                                        )
+                                    )
+                                }
+                            }
+
+                            // Optional custom details prompt toggle
+                            TextButton(
+                                onClick = { showAiCustomPromptField = !showAiCustomPromptField },
+                                modifier = Modifier.align(Alignment.Start)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.AutoAwesome,
+                                    contentDescription = null,
+                                    tint = HolidayCrimson,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = if (showAiCustomPromptField) "Hide Custom Prompt ▲" else "+ Add Custom Memory or Detail for AI ▼",
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = HolidayCrimson
+                                )
+                            }
+
+                            if (showAiCustomPromptField) {
+                                OutlinedTextField(
+                                    value = customAiPrompt,
+                                    onValueChange = { customAiPrompt = it },
+                                    label = { Text("Custom Prompt / Personal Note for AI", fontSize = 12.sp) },
+                                    placeholder = { Text("e.g., mention fond childhood memories or wishing good health", fontSize = 11.sp) },
+                                    shape = RoundedCornerShape(10.dp),
+                                    maxLines = 2,
+                                    modifier = Modifier.fillMaxWidth().testTag("custom_ai_prompt_input")
+                                )
                             }
 
                             // Live Credit Calculation Card
@@ -921,7 +1042,7 @@ fun CustomizeCardScreen(
                                     }
                                     Spacer(modifier = Modifier.height(4.dp))
                                     Text(
-                                        text = "• Selected: ${selectedTextLength.label} (${selectedTextLength.approxWords})\n" +
+                                        text = "• Selected: ${selectedTextLength.label} (${selectedTextLength.approxWords}) • Tone: ${selectedTone.displayName}\n" +
                                                "• Required: ${selectedTextLength.tokensRequired} Tokens 🪙 (deducted upon creation)\n" +
                                                "• Current Balance: $credits Credits\n" +
                                                "• Balance After Generation: ${if (isPro) "Unlimited (Pro Active 👑)" else "${maxOf(0, credits - selectedTextLength.tokensRequired)} Credits"}",
@@ -938,13 +1059,23 @@ fun CustomizeCardScreen(
                                     val tokensNeeded = selectedTextLength.tokensRequired
                                     if (SubscriptionManager.hasEnoughCredits(tokensNeeded)) {
                                         SubscriptionManager.useCredits(tokensNeeded)
-                                        val generatedMsg = generateCardMessage(template, recipientName, senderName, selectedTextLength)
-                                        viewModel.updateCardMessage(generatedMsg)
-                                        Toast.makeText(
-                                            context,
-                                            "Generated ${selectedTextLength.label} greeting! Used $tokensNeeded tokens 🪙",
-                                            Toast.LENGTH_SHORT
-                                        ).show()
+                                        viewModel.regenerateCardMessageWithAi(
+                                            tone = selectedTone,
+                                            length = when (selectedTextLength) {
+                                                CardTextLength.SHORT -> AiWishLength.SHORT
+                                                CardTextLength.MEDIUM -> AiWishLength.MEDIUM
+                                                CardTextLength.LONG -> AiWishLength.LONG
+                                                CardTextLength.POETIC -> AiWishLength.POETIC
+                                            },
+                                            customPrompt = customAiPrompt,
+                                            onSuccess = {
+                                                Toast.makeText(
+                                                    context,
+                                                    "Generated ${selectedTone.displayName} greeting! Used $tokensNeeded tokens 🪙",
+                                                    Toast.LENGTH_SHORT
+                                                ).show()
+                                            }
+                                        )
                                     } else {
                                         showCreditDialog = true
                                     }
@@ -958,7 +1089,7 @@ fun CustomizeCardScreen(
                                 Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    "Generate ${selectedTextLength.label} Greeting (${selectedTextLength.tokensRequired} Tokens 🪙)",
+                                    "Generate with AI ✨ (${selectedTextLength.tokensRequired} Tokens 🪙)",
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 13.sp
                                 )
@@ -982,6 +1113,55 @@ fun CustomizeCardScreen(
                             .fillMaxWidth()
                             .testTag("personal_message_input")
                     )
+
+                    // Quick AI Regenerate helper row if user wants a different text
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 2.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Don't like this text?",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        OutlinedButton(
+                            onClick = {
+                                viewModel.regenerateCardMessageWithAi(
+                                    tone = selectedTone,
+                                    length = when (selectedTextLength) {
+                                        CardTextLength.SHORT -> AiWishLength.SHORT
+                                        CardTextLength.MEDIUM -> AiWishLength.MEDIUM
+                                        CardTextLength.LONG -> AiWishLength.LONG
+                                        CardTextLength.POETIC -> AiWishLength.POETIC
+                                    },
+                                    customPrompt = customAiPrompt,
+                                    onSuccess = {
+                                        Toast.makeText(context, "Card text regenerated with AI! ✨", Toast.LENGTH_SHORT).show()
+                                    }
+                                )
+                            },
+                            shape = RoundedCornerShape(10.dp),
+                            border = BorderStroke(1.dp, HolidayGold),
+                            modifier = Modifier.testTag("quick_regenerate_card_text_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.AutoAwesome,
+                                contentDescription = null,
+                                tint = HolidayGold,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "Regenerate with AI ✨",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = HolidayGold
+                            )
+                        }
+                    }
 
                     // Sender Name Field
                     OutlinedTextField(

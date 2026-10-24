@@ -3,6 +3,8 @@ package com.example.ui.components
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
 import android.content.Context
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -11,7 +13,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -27,6 +28,7 @@ import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.AlertDialog
@@ -87,10 +89,52 @@ fun ScheduleGreetingDialog(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
+    var selectedPlatform by remember { mutableStateOf("WhatsApp") }
     var recipientName by remember { mutableStateOf(initialRecipientName.ifBlank { "Loved One" }) }
     var phoneNumber by remember { mutableStateOf("") }
     var emailAddress by remember { mutableStateOf("") }
-    var selectedPlatform by remember { mutableStateOf("WhatsApp") }
+
+    // Contact Picker Launcher from Device Address Book
+    val contactPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickContact()
+    ) { contactUri ->
+        if (contactUri != null) {
+            try {
+                val cursor = context.contentResolver.query(contactUri, null, null, null, null)
+                cursor?.use {
+                    if (it.moveToFirst()) {
+                        val nameIndex = it.getColumnIndex(android.provider.ContactsContract.Contacts.DISPLAY_NAME)
+                        if (nameIndex != -1) {
+                            val name = it.getString(nameIndex)
+                            if (!name.isNullOrBlank()) recipientName = name
+                        }
+                        val idIndex = it.getColumnIndex(android.provider.ContactsContract.Contacts._ID)
+                        if (idIndex != -1) {
+                            val contactId = it.getString(idIndex)
+                            val phoneCursor = context.contentResolver.query(
+                                android.provider.ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+                                null,
+                                android.provider.ContactsContract.CommonDataKinds.Phone.CONTACT_ID + " = ?",
+                                arrayOf(contactId),
+                                null
+                            )
+                            phoneCursor?.use { pCursor ->
+                                if (pCursor.moveToFirst()) {
+                                    val numIndex = pCursor.getColumnIndex(android.provider.ContactsContract.CommonDataKinds.Phone.NUMBER)
+                                    if (numIndex != -1) {
+                                        val num = pCursor.getString(numIndex)
+                                        if (!num.isNullOrBlank()) phoneNumber = num
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
 
     val platformOptions = remember {
         listOf(
@@ -117,7 +161,6 @@ fun ScheduleGreetingDialog(
     // Normalize if hour overflowed
     if (selectedHour >= 24) {
         selectedHour = 9
-        // Add 1 day
         val cal = Calendar.getInstance().apply { add(Calendar.DAY_OF_MONTH, 1) }
         selectedYear = cal.get(Calendar.YEAR)
         selectedMonth = cal.get(Calendar.MONTH)
@@ -162,7 +205,7 @@ fun ScheduleGreetingDialog(
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "Auto-triggers at the exact time & date",
+                            text = "Select Platform & Person to Auto-Deliver",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -180,7 +223,7 @@ fun ScheduleGreetingDialog(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                // 1. Recipient Details & Platform
+                // 1. Step 1: Select Platform
                 Card(
                     shape = RoundedCornerShape(14.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
@@ -189,32 +232,20 @@ fun ScheduleGreetingDialog(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        OutlinedTextField(
-                            value = recipientName,
-                            onValueChange = { recipientName = it },
-                            label = { Text("Recipient Name") },
-                            placeholder = { Text("e.g. Mom, Best Friend, Alex") },
-                            singleLine = true,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag("schedule_recipient_input")
-                        )
-
-                        // Platform Selector
                         Text(
-                            text = "Select Send Platform:",
+                            text = "Step 1: Select Delivery Platform",
                             style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Bold,
+                            color = HolidayCrimson
                         )
                         Text(
-                            text = "Choose which app will deliver your scheduled holiday greeting",
+                            text = "Choose which app will deliver your scheduled greeting",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
 
-                        // Multi-platform chips row (horizontal scrollable)
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -238,15 +269,71 @@ fun ScheduleGreetingDialog(
                                 )
                             }
                         }
+                    }
+                }
 
-                        // Target-specific contact inputs
+                // 2. Step 2: Select Person & Contact
+                Card(
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text(
+                                    text = "Step 2: Select Recipient Person",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = HolidayPineGreen
+                                )
+                                Text(
+                                    text = "Recognized by app for direct scheduled delivery",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+
+                            // Pick Contact Button
+                            OutlinedButton(
+                                onClick = { contactPickerLauncher.launch(null) },
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Pick Contact", fontSize = 12.sp)
+                            }
+                        }
+
+                        OutlinedTextField(
+                            value = recipientName,
+                            onValueChange = { recipientName = it },
+                            label = { Text("Recipient Name") },
+                            placeholder = { Text("e.g. Mom, Best Friend, Alex") },
+                            singleLine = true,
+                            leadingIcon = {
+                                Icon(Icons.Default.Person, contentDescription = null, tint = HolidayPineGreen)
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("schedule_recipient_input")
+                        )
+
                         when (selectedPlatform) {
                             "WhatsApp", "SMS", "Telegram" -> {
                                 OutlinedTextField(
                                     value = phoneNumber,
                                     onValueChange = { phoneNumber = it },
-                                    label = { Text(if (selectedPlatform == "WhatsApp") "Recipient WhatsApp Number (Optional)" else "Recipient Mobile / Phone Number") },
-                                    placeholder = { Text("+1 234 567 8900 (or leave empty)") },
+                                    label = { Text(if (selectedPlatform == "WhatsApp") "Recipient WhatsApp Number" else "Recipient Mobile Phone Number") },
+                                    placeholder = { Text("+1 234 567 8900") },
                                     leadingIcon = {
                                         Icon(imageVector = Icons.Default.Phone, contentDescription = null, tint = HolidayPineGreen)
                                     },
@@ -260,7 +347,7 @@ fun ScheduleGreetingDialog(
                                 OutlinedTextField(
                                     value = emailAddress,
                                     onValueChange = { emailAddress = it },
-                                    label = { Text("Recipient Email Address (Optional)") },
+                                    label = { Text("Recipient Email Address") },
                                     placeholder = { Text("friend@example.com") },
                                     leadingIcon = {
                                         Icon(imageVector = Icons.Default.Send, contentDescription = null, tint = HolidayCrimson)
@@ -271,25 +358,25 @@ fun ScheduleGreetingDialog(
                                         .testTag("schedule_email_input")
                                 )
                             }
-                            else -> {
-                                Surface(
-                                    shape = RoundedCornerShape(8.dp),
-                                    color = MaterialTheme.colorScheme.surface,
-                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-                                ) {
-                                    Text(
-                                        text = "✨ When the scheduled time arrives, you'll receive a high-priority prompt to send directly via $selectedPlatform.",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.padding(10.dp)
-                                    )
-                                }
-                            }
+                            else -> {}
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.surface,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                        ) {
+                            Text(
+                                text = "✨ When scheduled time arrives, the app recognizes '$recipientName' and delivers directly via $selectedPlatform.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(10.dp)
+                            )
                         }
                     }
                 }
 
-                // 2. Exact Date & Time Picker
+                // 3. Exact Date & Time Picker
                 Card(
                     shape = RoundedCornerShape(14.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
@@ -301,7 +388,7 @@ fun ScheduleGreetingDialog(
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         Text(
-                            text = "Scheduled Send Date & Time",
+                            text = "Step 3: Scheduled Date & Time",
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold
                         )
@@ -415,7 +502,7 @@ fun ScheduleGreetingDialog(
                     }
                 }
 
-                // 3. Message Snippet
+                // 4. Message Snippet
                 Surface(
                     shape = RoundedCornerShape(12.dp),
                     color = HolidayGold.copy(alpha = 0.12f),
@@ -424,7 +511,7 @@ fun ScheduleGreetingDialog(
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
                         Text(
-                            text = "Greeting Preview:",
+                            text = "Greeting Preview to $recipientName via $selectedPlatform:",
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFF4A3400)
@@ -462,7 +549,7 @@ fun ScheduleGreetingDialog(
                         ScheduledGreetingScheduler(context).schedule(fullEntity)
 
                         withContext(Dispatchers.Main) {
-                            val formattedTime = "${dateFormatter.format(targetCalendar.time)} at ${timeFormatter.format(targetCalendar.time)} via $selectedPlatform"
+                            val formattedTime = "${dateFormatter.format(targetCalendar.time)} at ${timeFormatter.format(targetCalendar.time)} for $recipientName via $selectedPlatform"
                             onScheduledSuccess(formattedTime)
                             onDismiss()
                         }
@@ -474,7 +561,7 @@ fun ScheduleGreetingDialog(
             ) {
                 Icon(Icons.Default.Send, contentDescription = null, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(6.dp))
-                Text("Schedule via $selectedPlatform", fontWeight = FontWeight.Bold)
+                Text("Schedule for $recipientName", fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {

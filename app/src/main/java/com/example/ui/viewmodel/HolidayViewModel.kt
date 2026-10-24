@@ -24,6 +24,7 @@ import com.example.model.AiWishLength
 import com.example.model.AiWishRequest
 import com.example.model.AiWishResponse
 import com.example.model.CardDecorationStyle
+import com.example.model.CardOccasion
 import com.example.model.CardTemplate
 import com.example.model.GeneratorOccasion
 import com.example.model.GeneratorRecipient
@@ -122,18 +123,43 @@ class HolidayViewModel(application: Application) : AndroidViewModel(application)
     private val _aiErrorMessage = MutableStateFlow<String?>(null)
     val aiErrorMessage: StateFlow<String?> = _aiErrorMessage.asStateFlow()
 
-    // Wishes Screen State
+    // Wishes Screen State & AI Overrides
     private val _selectedCategory = MutableStateFlow(WishCategory.ALL)
     val selectedCategory: StateFlow<WishCategory> = _selectedCategory.asStateFlow()
 
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
 
+    // Map of wish id to regenerated AI text
+    private val _regeneratedWishTexts = MutableStateFlow<Map<String, String>>(emptyMap())
+    val regeneratedWishTexts: StateFlow<Map<String, String>> = _regeneratedWishTexts.asStateFlow()
+
+    // Map of card template id to custom/regenerated message
+    private val _customCardTemplateMessages = MutableStateFlow<Map<String, String>>(emptyMap())
+    val customCardTemplateMessages: StateFlow<Map<String, String>> = _customCardTemplateMessages.asStateFlow()
+
+    // Card Customizer AI Assistant State
+    private val _cardAiTone = MutableStateFlow(AiTone.WARM)
+    val cardAiTone: StateFlow<AiTone> = _cardAiTone.asStateFlow()
+
+    private val _cardAiLength = MutableStateFlow(AiWishLength.MEDIUM)
+    val cardAiLength: StateFlow<AiWishLength> = _cardAiLength.asStateFlow()
+
+    private val _cardAiCustomPrompt = MutableStateFlow("")
+    val cardAiCustomPrompt: StateFlow<String> = _cardAiCustomPrompt.asStateFlow()
+
+    private val _cardAiIsGenerating = MutableStateFlow(false)
+    val cardAiIsGenerating: StateFlow<Boolean> = _cardAiIsGenerating.asStateFlow()
+
     val filteredWishes: StateFlow<List<Wish>> = combine(
         _selectedCategory,
-        _searchQuery
-    ) { category, query ->
-        val list = WishesRepository.getWishesByCategory(category)
+        _searchQuery,
+        _regeneratedWishTexts
+    ) { category, query, customMap ->
+        val list = WishesRepository.getWishesByCategory(category).map { wish ->
+            val overrideText = customMap[wish.id]
+            if (overrideText != null) wish.copy(text = overrideText) else wish
+        }
         if (query.isBlank()) {
             list
         } else {
@@ -301,7 +327,8 @@ class HolidayViewModel(application: Application) : AndroidViewModel(application)
     fun prepareCardForCustomization(template: CardTemplate) {
         _selectedCardTemplate.value = template
         _cardRecipientName.value = ""
-        _cardCustomMessage.value = template.defaultMessage
+        val customMsg = _customCardTemplateMessages.value[template.id] ?: template.defaultMessage
+        _cardCustomMessage.value = customMsg
         _cardSenderName.value = ""
         _cardTextSizeSp.value = 15f
         _cardTextAlign.value = "Center"
@@ -582,5 +609,237 @@ class HolidayViewModel(application: Application) : AndroidViewModel(application)
 
     fun restorePurchases(): Boolean {
         return monetizationManager.restorePurchases()
+    }
+
+    // ============================================================
+    // AI CARD & WISH REGENERATION / CREATION METHODS
+    // ============================================================
+
+    fun setCardAiTone(tone: AiTone) {
+        _cardAiTone.value = tone
+    }
+
+    fun setCardAiLength(length: AiWishLength) {
+        _cardAiLength.value = length
+    }
+
+    fun setCardAiCustomPrompt(prompt: String) {
+        _cardAiCustomPrompt.value = prompt
+    }
+
+    /**
+     * Regenerates a wish with fresh AI-generated message.
+     * Updates the UI instantly, and updates Room DB if the wish was saved to favorites.
+     */
+    fun regenerateWishWithAi(wish: Wish, onComplete: ((String) -> Unit)? = null) {
+        viewModelScope.launch {
+            val newText = aiWishRepository.regenerateWishText(
+                category = wish.category,
+                currentText = _regeneratedWishTexts.value[wish.id] ?: wish.text,
+                seed = System.currentTimeMillis()
+            )
+            _regeneratedWishTexts.value = _regeneratedWishTexts.value + (wish.id to newText)
+
+            // If this wish is currently in favorites, keep Room DB in sync
+            val existingFav = favorites.value.find { it.id == wish.id }
+            if (existingFav != null) {
+                favoriteRepository.saveFavorite(existingFav.copy(text = newText))
+            }
+            onComplete?.invoke(newText)
+        }
+    }
+
+    /**
+     * Regenerates a saved favorite wish in Room DB with fresh AI text.
+     */
+    fun regenerateFavoriteWishWithAi(favoriteId: String, onComplete: ((String) -> Unit)? = null) {
+        viewModelScope.launch {
+            val fav = favorites.value.find { it.id == favoriteId } ?: return@launch
+            val category = try {
+                WishCategory.valueOf(fav.category.uppercase().replace(" ", "_"))
+            } catch (e: Exception) {
+                WishCategory.GENERAL
+            }
+            val newText = aiWishRepository.regenerateWishText(
+                category = category,
+                currentText = fav.text,
+                seed = System.currentTimeMillis()
+            )
+            favoriteRepository.saveFavorite(fav.copy(text = newText))
+            _regeneratedWishTexts.value = _regeneratedWishTexts.value + (favoriteId to newText)
+            onComplete?.invoke(newText)
+        }
+    }
+
+    /**
+     * Regenerates the active custom card message in CustomizeCardScreen with AI.
+     */
+    fun regenerateCardMessageWithAi(
+        tone: AiTone? = null,
+        length: AiWishLength? = null,
+        customPrompt: String? = null,
+        onSuccess: ((String) -> Unit)? = null
+    ) {
+        val selectedTone = tone ?: _cardAiTone.value
+        val selectedLength = length ?: _cardAiLength.value
+        val selectedPrompt = customPrompt ?: _cardAiCustomPrompt.value
+        val template = _selectedCardTemplate.value
+        val recipient = _cardRecipientName.value
+        val sender = _cardSenderName.value
+
+        viewModelScope.launch {
+            _cardAiIsGenerating.value = true
+            try {
+                val newGreeting = aiWishRepository.generateCardGreeting(
+                    occasion = template.occasion,
+                    recipientName = recipient,
+                    senderName = sender,
+                    tone = selectedTone,
+                    length = selectedLength,
+                    customPrompt = selectedPrompt,
+                    seed = System.currentTimeMillis()
+                )
+                _cardCustomMessage.value = newGreeting
+                onSuccess?.invoke(newGreeting)
+            } finally {
+                _cardAiIsGenerating.value = false
+            }
+        }
+    }
+
+    /**
+     * Regenerates the default message of a card template in CardsScreen grid.
+     */
+    fun regenerateCardTemplateDefaultMessage(template: CardTemplate, onComplete: ((String) -> Unit)? = null) {
+        viewModelScope.launch {
+            val newText = aiWishRepository.generateCardGreeting(
+                occasion = template.occasion,
+                recipientName = "",
+                senderName = "",
+                tone = AiTone.WARM,
+                length = AiWishLength.MEDIUM,
+                customPrompt = "",
+                seed = System.currentTimeMillis()
+            )
+            _customCardTemplateMessages.value = _customCardTemplateMessages.value + (template.id to newText)
+            onComplete?.invoke(newText)
+        }
+    }
+
+    /**
+     * Regenerates the text of a saved card in MyCardsScreen and updates Room DB.
+     */
+    fun regenerateSavedCardTextWithAi(cardId: String, onComplete: ((String) -> Unit)? = null) {
+        viewModelScope.launch {
+            val card = savedCards.value.find { it.id == cardId } ?: return@launch
+            val occasion = try {
+                CardOccasion.valueOf(card.occasion)
+            } catch (e: Exception) {
+                CardOccasion.CHRISTMAS
+            }
+            val newText = aiWishRepository.generateCardGreeting(
+                occasion = occasion,
+                recipientName = card.recipientName,
+                senderName = card.senderName,
+                tone = AiTone.WARM,
+                length = AiWishLength.MEDIUM,
+                customPrompt = "",
+                seed = System.currentTimeMillis()
+            )
+            cardRepository.saveCard(card.copy(message = newText))
+            onComplete?.invoke(newText)
+        }
+    }
+
+    /**
+     * Creates a card with AI: selects best template, crafts personalized greeting,
+     * and sets state for immediate customization/preview.
+     */
+    fun createCardWithAi(
+        occasion: CardOccasion,
+        recipientName: String,
+        senderName: String,
+        tone: AiTone,
+        themeStyle: CardDecorationStyle,
+        length: AiWishLength,
+        customPrompt: String = "",
+        photoUri: String? = null
+    ): CardTemplate {
+        val templatesForOccasion = when (occasion) {
+            CardOccasion.CHRISTMAS -> CardTemplatesRepository.getChristmasTemplates()
+            CardOccasion.NEW_YEAR -> CardTemplatesRepository.getNewYearTemplates()
+            CardOccasion.HOLIDAY_SEASON -> CardTemplatesRepository.getSeasonTemplates()
+        }
+        val matchingTemplate = templatesForOccasion.find { it.decorationStyle == themeStyle }
+            ?: templatesForOccasion.firstOrNull()
+            ?: cardTemplates.first()
+
+        val generatedMessage = kotlinx.coroutines.runBlocking {
+            aiWishRepository.generateCardGreeting(
+                occasion = occasion,
+                recipientName = recipientName,
+                senderName = senderName,
+                tone = tone,
+                length = length,
+                customPrompt = customPrompt,
+                seed = System.currentTimeMillis()
+            )
+        }
+
+        _selectedCardTemplate.value = matchingTemplate
+        _cardRecipientName.value = recipientName.trim()
+        _cardCustomMessage.value = generatedMessage
+        _cardSenderName.value = senderName.trim()
+        _cardPhotoUri.value = photoUri
+        _cardTextSizeSp.value = 14.5f
+        _cardTextAlign.value = "Center"
+        _showRecipient.value = recipientName.isNotBlank()
+        _showSender.value = senderName.isNotBlank()
+        _cardAiTone.value = tone
+        _cardAiLength.value = length
+        _cardAiCustomPrompt.value = customPrompt
+
+        return matchingTemplate
+    }
+
+    fun prepareCardFromWish(wishText: String, occasion: CardOccasion = CardOccasion.CHRISTMAS, photoUri: String? = null) {
+        val template = when (occasion) {
+            CardOccasion.NEW_YEAR -> CardTemplatesRepository.getNewYearTemplates().first()
+            CardOccasion.HOLIDAY_SEASON -> CardTemplatesRepository.getSeasonTemplates().first()
+            else -> CardTemplatesRepository.getChristmasTemplates().first()
+        }
+        _selectedCardTemplate.value = template
+        _cardCustomMessage.value = wishText
+        _cardPhotoUri.value = photoUri
+        _cardRecipientName.value = ""
+        _cardSenderName.value = ""
+        _cardTextSizeSp.value = 14f
+        _cardTextAlign.value = "Center"
+    }
+
+    /**
+     * Regenerates an individual generated wish in CreateWishScreen.
+     */
+    fun regenerateGeneratedWish(resultId: String) {
+        val currentList = _generatedWishes.value.toMutableList()
+        val index = currentList.indexOfFirst { it.id == resultId }
+        if (index != -1) {
+            val item = currentList[index]
+            val occasion = when (item.occasion) {
+                GeneratorOccasion.CHRISTMAS -> WishCategory.CHRISTMAS
+                GeneratorOccasion.NEW_YEAR -> WishCategory.NEW_YEAR
+                GeneratorOccasion.HOLIDAY_SEASON -> WishCategory.GENERAL
+                else -> WishCategory.GENERAL
+            }
+            viewModelScope.launch {
+                val newText = aiWishRepository.regenerateWishText(
+                    category = occasion,
+                    currentText = item.wishText,
+                    seed = System.currentTimeMillis()
+                )
+                currentList[index] = item.copy(wishText = newText)
+                _generatedWishes.value = currentList
+            }
+        }
     }
 }

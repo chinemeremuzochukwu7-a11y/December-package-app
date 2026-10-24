@@ -25,10 +25,24 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.OutputStream
 
+enum class CardExportSize(
+    val label: String,
+    val width: Int,
+    val height: Int,
+    val ratioLabel: String,
+    val description: String
+) {
+    CLASSIC_GREETING("Classic Greeting (3:4)", 1200, 1600, "3:4", "Standard luxury greeting card format"),
+    STORY_PORTRAIT("Story / Status (9:16)", 1080, 1920, "9:16", "Ideal for Instagram, WhatsApp & Facebook Stories"),
+    SQUARE_POST("Square Post (1:1)", 1080, 1080, "1:1", "Perfect for Instagram feeds & Facebook posts"),
+    COMPACT_HD("Compact HD (9:16)", 720, 1280, "9:16", "Fast lightweight sharing for chats")
+}
+
 object CardImageExporter {
 
     /**
-     * Renders a pristine, high-resolution 1080x1520 Bitmap containing ONLY the specific card.
+     * Renders a pristine, high-resolution Bitmap containing ONLY the specific card.
+     * Incorporates user uploaded photos, festive ornaments, borders, and custom aspect ratios.
      * Ensures zero device UI buttons, bars, or background elements are captured.
      */
     fun renderCardBitmap(
@@ -38,16 +52,19 @@ object CardImageExporter {
         customMessage: String? = null,
         senderName: String = "",
         fontStyle: String = "Classic",
-        isPro: Boolean = false
+        isPro: Boolean = false,
+        exportSize: CardExportSize = CardExportSize.CLASSIC_GREETING,
+        photoUri: String? = null,
+        context: Context? = null
     ): Bitmap {
-        val width = 1080
-        val height = 1520
+        val width = exportSize.width
+        val height = exportSize.height
+        val scale = (width / 1080f).coerceIn(0.6f, 1.4f)
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
 
         val primaryColor = (0xFF000000 or template.primaryColorHex).toInt()
         val secondaryColor = (0xFF000000 or template.secondaryColorHex).toInt()
-        val accentColor = (0xFF000000 or template.accentColorHex).toInt()
         val goldColor = 0xFFFFD700.toInt()
 
         // 1. Draw gradient card background
@@ -60,85 +77,138 @@ object CardImageExporter {
             )
         }
         val cardRect = RectF(0f, 0f, width.toFloat(), height.toFloat())
-        canvas.drawRoundRect(cardRect, 48f, 48f, bgPaint)
+        canvas.drawRoundRect(cardRect, 48f * scale, 48f * scale, bgPaint)
 
         // 2. Draw luxury outer border & inner accent border
         val outerBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = goldColor
             style = Paint.Style.STROKE
-            strokeWidth = 10f
+            strokeWidth = 10f * scale
         }
         val innerBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = 0x88FFD700.toInt()
             style = Paint.Style.STROKE
-            strokeWidth = 3f
+            strokeWidth = 3f * scale
         }
-        canvas.drawRoundRect(RectF(28f, 28f, width - 28f, height - 28f), 36f, 36f, outerBorderPaint)
-        canvas.drawRoundRect(RectF(48f, 48f, width - 48f, height - 48f), 28f, 28f, innerBorderPaint)
+        canvas.drawRoundRect(RectF(28f * scale, 28f * scale, width - 28f * scale, height - 28f * scale), 36f * scale, 36f * scale, outerBorderPaint)
+        canvas.drawRoundRect(RectF(48f * scale, 48f * scale, width - 48f * scale, height - 48f * scale), 28f * scale, 28f * scale, innerBorderPaint)
 
         // 3. Decorative top stars and sparkles
         val decorPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             color = goldColor
-            textSize = 34f
+            textSize = 32f * scale
             textAlign = Paint.Align.CENTER
         }
-        canvas.drawText("✦  ★  ✦  ★  ✦", width / 2f, 120f, decorPaint)
+        canvas.drawText("✦  ★  ✦  ★  ✦", width / 2f, 110f * scale, decorPaint)
 
         // 4. Subtitle
         val subtitlePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             color = 0xCCFFFFFF.toInt()
-            textSize = 28f
-            letterSpacing = 0.25f
+            textSize = 26f * scale
+            letterSpacing = 0.2f
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
             textAlign = Paint.Align.CENTER
         }
-        canvas.drawText(template.subtitle.uppercase(), width / 2f, 175f, subtitlePaint)
+        canvas.drawText(template.subtitle.uppercase(), width / 2f, 160f * scale, subtitlePaint)
 
         // 5. Main Title
         val titleText = customTitle?.takeIf { it.isNotBlank() } ?: template.title
         val titlePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             color = 0xFFFFFFFF.toInt()
-            textSize = 62f
+            textSize = 56f * scale
             typeface = Typeface.create(Typeface.SERIF, Typeface.BOLD)
             textAlign = Paint.Align.CENTER
         }
-        canvas.drawText(titleText, width / 2f, 260f, titlePaint)
+        canvas.drawText(titleText, width / 2f, 235f * scale, titlePaint)
 
         // Decorative divider under title
         val dividerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = goldColor
-            strokeWidth = 4f
+            strokeWidth = 3.5f * scale
         }
-        canvas.drawLine(width * 0.25f, 305f, width * 0.75f, 305f, dividerPaint)
+        canvas.drawLine(width * 0.25f, 275f * scale, width * 0.75f, 275f * scale, dividerPaint)
 
-        var currentY = 380f
+        var currentY = 320f * scale
+
+        // 5.5 Framed Holiday Photo if user uploaded an image
+        if (!photoUri.isNullOrBlank() && context != null) {
+            try {
+                val inputUri = Uri.parse(photoUri)
+                val stream = context.contentResolver.openInputStream(inputUri)
+                val rawBitmap = android.graphics.BitmapFactory.decodeStream(stream)
+                stream?.close()
+                if (rawBitmap != null) {
+                    val frameDiameter = (width * 0.28f).coerceIn(160f * scale, 340f * scale)
+                    val frameRadius = frameDiameter / 2f
+                    val centerX = width / 2f
+                    val centerY = currentY + frameRadius
+
+                    val minDim = minOf(rawBitmap.width, rawBitmap.height)
+                    val srcX = (rawBitmap.width - minDim) / 2
+                    val srcY = (rawBitmap.height - minDim) / 2
+                    val squareBitmap = Bitmap.createBitmap(rawBitmap, srcX, srcY, minDim, minDim)
+                    val scaledPhoto = Bitmap.createScaledBitmap(squareBitmap, frameDiameter.toInt(), frameDiameter.toInt(), true)
+
+                    // Draw circular photo using BitmapShader
+                    val photoPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        shader = android.graphics.BitmapShader(scaledPhoto, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
+                    }
+
+                    // Shadow behind photo frame
+                    val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        color = 0x55000000
+                        style = Paint.Style.FILL
+                    }
+                    canvas.drawCircle(centerX, centerY + 5f * scale, frameRadius + 3f * scale, shadowPaint)
+
+                    // Photo content
+                    canvas.save()
+                    canvas.translate(centerX - frameRadius, centerY - frameRadius)
+                    val roundRect = RectF(0f, 0f, frameDiameter, frameDiameter)
+                    canvas.drawRoundRect(roundRect, frameRadius, frameRadius, photoPaint)
+                    canvas.restore()
+
+                    // Gold decorative circular ring border
+                    val ringPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                        color = goldColor
+                        style = Paint.Style.STROKE
+                        strokeWidth = 7f * scale
+                    }
+                    canvas.drawCircle(centerX, centerY, frameRadius, ringPaint)
+
+                    currentY += frameDiameter + 30f * scale
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
 
         // 6. Recipient Greeting
         if (recipientName.isNotBlank()) {
             val toPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = goldColor
-                textSize = 38f
+                textSize = 34f * scale
                 typeface = Typeface.create(Typeface.SERIF, Typeface.BOLD_ITALIC)
                 textAlign = Paint.Align.CENTER
             }
             canvas.drawText("Dearest $recipientName,", width / 2f, currentY, toPaint)
-            currentY += 75f
+            currentY += 65f * scale
         } else {
-            currentY += 20f
+            currentY += 15f * scale
         }
 
         // 7. Message Body (StaticLayout for clean multi-line word wrapping)
         val messageText = customMessage?.takeIf { it.isNotBlank() } ?: template.defaultMessage
         val messagePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             color = 0xFFFFFFFF.toInt()
-            textSize = 36f
+            textSize = (if (exportSize == CardExportSize.SQUARE_POST) 30f else 34f) * scale
             typeface = if (fontStyle == "Serif") Typeface.SERIF else Typeface.DEFAULT
         }
-        val messageWidth = (width - 240).coerceAtLeast(400)
+        val messageWidth = (width - (220f * scale).toInt()).coerceAtLeast(350)
         val messageLayout = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             StaticLayout.Builder.obtain(messageText, 0, messageText.length, messagePaint, messageWidth)
                 .setAlignment(Layout.Alignment.ALIGN_CENTER)
-                .setLineSpacing(16f, 1.15f)
+                .setLineSpacing(14f * scale, 1.15f)
                 .build()
         } else {
             @Suppress("DEPRECATION")
@@ -148,31 +218,32 @@ object CardImageExporter {
                 messageWidth,
                 Layout.Alignment.ALIGN_CENTER,
                 1.15f,
-                16f,
+                14f * scale,
                 false
             )
         }
 
+        val paddingLeft = (width - messageWidth) / 2f
         canvas.save()
-        canvas.translate(120f, currentY)
+        canvas.translate(paddingLeft, currentY)
         messageLayout.draw(canvas)
         canvas.restore()
 
-        currentY += messageLayout.height + 80f
+        currentY += messageLayout.height + 65f * scale
 
         // 8. Sender Line
         if (senderName.isNotBlank()) {
             val senderPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = goldColor
-                textSize = 36f
+                textSize = 32f * scale
                 typeface = Typeface.create(Typeface.SERIF, Typeface.BOLD_ITALIC)
                 textAlign = Paint.Align.CENTER
             }
             canvas.drawText("With love & warm wishes,", width / 2f, currentY, senderPaint)
-            currentY += 55f
+            currentY += 50f * scale
             val senderNamePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = 0xFFFFFFFF.toInt()
-                textSize = 42f
+                textSize = 38f * scale
                 typeface = Typeface.create(Typeface.SERIF, Typeface.BOLD)
                 textAlign = Paint.Align.CENTER
             }
@@ -182,20 +253,21 @@ object CardImageExporter {
         // 9. Bottom Festive Ornaments
         val bottomDecorPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             color = goldColor
-            textSize = 32f
+            textSize = 28f * scale
             textAlign = Paint.Align.CENTER
         }
-        canvas.drawText("🎄  ❄️  ✨  ❄️  🎄", width / 2f, height - 120f, bottomDecorPaint)
+        val bottomDecorY = if (!isPro) height - 90f * scale else height - 60f * scale
+        canvas.drawText("🎄  ❄️  ✨  ❄️  🎄", width / 2f, bottomDecorY, bottomDecorPaint)
 
         // 10. Watermark if free user
         if (!isPro) {
             val watermarkPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = 0xAAFFFFFF.toInt()
-                textSize = 22f
+                textSize = 20f * scale
                 typeface = Typeface.DEFAULT
                 textAlign = Paint.Align.CENTER
             }
-            canvas.drawText("✨ Created with Holiday Wishes 🎄", width / 2f, height - 70f, watermarkPaint)
+            canvas.drawText("✨ Created with Holiday Wishes 🎄", width / 2f, height - 45f * scale, watermarkPaint)
         }
 
         return bitmap

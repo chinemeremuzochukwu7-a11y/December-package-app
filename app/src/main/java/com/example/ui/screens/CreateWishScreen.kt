@@ -317,7 +317,8 @@ fun CreateWishScreen(
                 GeneratedWishCard(
                     result = result,
                     isFavorite = favoriteIds.contains(result.id),
-                    onToggleFavorite = { viewModel.toggleFavoriteGenerated(result) }
+                    onToggleFavorite = { viewModel.toggleFavoriteGenerated(result) },
+                    onRegenerate = { viewModel.regenerateGeneratedWish(result.id) }
                 )
             }
         }
@@ -347,7 +348,8 @@ private fun chipColors(isSelected: Boolean) = FilterChipDefaults.filterChipColor
 private fun GeneratedWishCard(
     result: WishGenerationResult,
     isFavorite: Boolean,
-    onToggleFavorite: () -> Unit
+    onToggleFavorite: () -> Unit,
+    onRegenerate: () -> Unit
 ) {
     val context = LocalContext.current
 
@@ -498,6 +500,21 @@ private fun GeneratedWishCard(
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text("Schedule", color = HolidayCrimson, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                }
+
+                IconButton(
+                    onClick = {
+                        onRegenerate()
+                        Toast.makeText(context, "Wish regenerated with AI! ✨", Toast.LENGTH_SHORT).show()
+                    },
+                    modifier = Modifier.size(36.dp).testTag("regenerate_generated_button_${result.id}")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.AutoAwesome,
+                        contentDescription = "Regenerate with AI",
+                        tint = HolidayGold,
+                        modifier = Modifier.size(18.dp)
+                    )
                 }
 
                 IconButton(

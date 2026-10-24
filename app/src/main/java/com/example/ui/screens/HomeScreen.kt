@@ -102,12 +102,27 @@ fun HomeScreen(
 ) {
     val isPro by SubscriptionManager.isPro.collectAsState()
     val credits by SubscriptionManager.credits.collectAsState()
+    val canClaimDailyCredit by SubscriptionManager.canClaimDailyCredit.collectAsState()
     val favoriteIds by viewModel.favoriteIds.collectAsStateWithLifecycle()
+    val regeneratedWishTexts by viewModel.regeneratedWishTexts.collectAsStateWithLifecycle()
     val snowEffectsEnabled by viewModel.snowEffectsEnabled.collectAsStateWithLifecycle()
+    val context = androidx.compose.ui.platform.LocalContext.current
     val featuredCardTemplates = CardTemplatesRepository.getAllTemplates().take(4)
-    val christmasWishes = WishesRepository.getChristmasWishes().take(4)
-    val newYearWishes = WishesRepository.getNewYearWishes().take(4)
-    val popularWishes = WishesRepository.getPopularWishes().take(6)
+    val christmasWishes = remember(regeneratedWishTexts) {
+        WishesRepository.getChristmasWishes().take(4).map { w ->
+            regeneratedWishTexts[w.id]?.let { w.copy(text = it) } ?: w
+        }
+    }
+    val newYearWishes = remember(regeneratedWishTexts) {
+        WishesRepository.getNewYearWishes().take(4).map { w ->
+            regeneratedWishTexts[w.id]?.let { w.copy(text = it) } ?: w
+        }
+    }
+    val popularWishes = remember(regeneratedWishTexts) {
+        WishesRepository.getPopularWishes().take(6).map { w ->
+            regeneratedWishTexts[w.id]?.let { w.copy(text = it) } ?: w
+        }
+    }
 
     Box(modifier = modifier.fillMaxSize()) {
         LazyColumn(
@@ -116,6 +131,71 @@ fun HomeScreen(
                 .testTag("home_screen"),
             contentPadding = PaddingValues(bottom = 96.dp)
         ) {
+            // Daily Free Credit Claim Banner
+            if (canClaimDailyCredit) {
+                item {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 6.dp)
+                            .clickable {
+                                if (SubscriptionManager.claimDailyCredit()) {
+                                    android.widget.Toast.makeText(
+                                        context,
+                                        "🎉 You claimed +1 Free Credit for today! Come back tomorrow for more! ✨",
+                                        android.widget.Toast.LENGTH_LONG
+                                    ).show()
+                                }
+                            }
+                            .testTag("daily_credit_claim_banner"),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = HolidayGold.copy(alpha = 0.15f)),
+                        border = BorderStroke(1.2.dp, HolidayGold)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp, vertical = 10.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                modifier = Modifier.weight(1f),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("🎁", fontSize = 24.sp)
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column {
+                                    Text(
+                                        text = "Daily Free Credit Available!",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = "Tap to claim your +1 free AI credit for today",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = HolidayCrimson
+                            ) {
+                                Text(
+                                    text = "CLAIM +1 🪙",
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = Color.White,
+                                    fontSize = 11.5.sp,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
             // Pro Badge & Credit Balance Landing Header
             item {
                 Row(
@@ -243,7 +323,8 @@ fun HomeScreen(
             // Section: Prominent "Create a Wish with AI" Banner
             item {
                 AiWishPromoCard(
-                    onGenerateClick = onNavigateToAiWishGenerator
+                    onGenerateClick = onNavigateToAiWishGenerator,
+                    onCardsClick = onNavigateToCards
                 )
             }
 
@@ -255,15 +336,6 @@ fun HomeScreen(
                     onMealsClick = onNavigateToMeals,
                     onAlarmsClick = onNavigateToAlarms
                 )
-            }
-
-            // Section: Before Year-End Season Earnings & Goal Forecaster
-            item {
-                Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
-                    SeasonEarningsForecasterCard(
-                        onNavigateToExpenses = onNavigateToExpenses
-                    )
-                }
             }
 
         // Section: Create a Holiday Card Spotlight
@@ -313,7 +385,8 @@ fun HomeScreen(
                     HomeWishHorizontalCard(
                         wish = wish,
                         isFavorite = favoriteIds.contains(wish.id),
-                        onToggleFavorite = { viewModel.toggleFavorite(wish) }
+                        onToggleFavorite = { viewModel.toggleFavorite(wish) },
+                        onRegenerate = { viewModel.regenerateWishWithAi(wish) }
                     )
                 }
             }
@@ -339,7 +412,8 @@ fun HomeScreen(
                     HomeWishHorizontalCard(
                         wish = wish,
                         isFavorite = favoriteIds.contains(wish.id),
-                        onToggleFavorite = { viewModel.toggleFavorite(wish) }
+                        onToggleFavorite = { viewModel.toggleFavorite(wish) },
+                        onRegenerate = { viewModel.regenerateWishWithAi(wish) }
                     )
                 }
             }
@@ -360,7 +434,8 @@ fun HomeScreen(
                 WishCard(
                     wish = wish,
                     isFavorite = favoriteIds.contains(wish.id),
-                    onToggleFavorite = { viewModel.toggleFavorite(wish) }
+                    onToggleFavorite = { viewModel.toggleFavorite(wish) },
+                    onRegenerate = { viewModel.regenerateWishWithAi(wish) }
                 )
             }
         }
@@ -650,7 +725,8 @@ private fun MainActionCard(
  */
 @Composable
 private fun AiWishPromoCard(
-    onGenerateClick: () -> Unit
+    onGenerateClick: () -> Unit,
+    onCardsClick: () -> Unit
 ) {
     Card(
         modifier = Modifier
@@ -686,7 +762,7 @@ private fun AiWishPromoCard(
                         color = HolidayGold.copy(alpha = 0.3f)
                     ) {
                         Text(
-                            text = "✨ AI POWERED",
+                            text = "✨ AI POWERED STUDIO",
                             color = Color(0xFF6B4E00),
                             fontSize = 11.sp,
                             fontWeight = FontWeight.ExtraBold,
@@ -699,7 +775,7 @@ private fun AiWishPromoCard(
                 Spacer(modifier = Modifier.height(10.dp))
 
                 Text(
-                    text = "Create a Wish with AI",
+                    text = "Create Wishes & Cards with AI",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
@@ -708,34 +784,66 @@ private fun AiWishPromoCard(
                 Spacer(modifier = Modifier.height(4.dp))
 
                 Text(
-                    text = "Create a personal message for someone special.",
+                    text = "Generate personal holiday greetings and tailor beautiful cards with AI.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                Button(
-                    onClick = onGenerateClick,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = HolidayCrimson,
-                        contentColor = Color.White
-                    ),
-                    shape = RoundedCornerShape(14.dp),
-                    modifier = Modifier.testTag("home_generate_with_ai_button")
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.AutoAwesome,
-                        contentDescription = null,
-                        tint = HolidayGold,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Generate with AI",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp
-                    )
+                    Button(
+                        onClick = onGenerateClick,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = HolidayCrimson,
+                            contentColor = Color.White
+                        ),
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("home_generate_with_ai_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AutoAwesome,
+                            contentDescription = null,
+                            tint = HolidayGold,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "AI Wishes ✨",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.5.sp
+                        )
+                    }
+
+                    Button(
+                        onClick = onCardsClick,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = HolidayGold,
+                            contentColor = Color(0xFF3E2C00)
+                        ),
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .testTag("home_create_card_ai_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CardGiftcard,
+                            contentDescription = null,
+                            tint = Color(0xFF3E2C00),
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "AI Cards 🎨",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.5.sp
+                        )
+                    }
                 }
             }
         }
@@ -819,7 +927,8 @@ private fun SectionHeader(
 private fun HomeWishHorizontalCard(
     wish: Wish,
     isFavorite: Boolean,
-    onToggleFavorite: () -> Unit
+    onToggleFavorite: () -> Unit,
+    onRegenerate: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
 
@@ -888,33 +997,54 @@ private fun HomeWishHorizontalCard(
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(
-                    onClick = { ClipboardHelper.copyText(context, wish.text) },
-                    modifier = Modifier.size(32.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.ContentCopy,
-                        contentDescription = "Copy wish",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(17.dp)
-                    )
+                if (onRegenerate != null) {
+                    IconButton(
+                        onClick = {
+                            onRegenerate()
+                            android.widget.Toast.makeText(context, "Wish regenerated with AI! ✨", android.widget.Toast.LENGTH_SHORT).show()
+                        },
+                        modifier = Modifier.size(32.dp).testTag("regenerate_home_wish_${wish.id}")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AutoAwesome,
+                            contentDescription = "Regenerate wish with AI",
+                            tint = HolidayGold,
+                            modifier = Modifier.size(17.dp)
+                        )
+                    }
+                } else {
+                    Spacer(modifier = Modifier.width(1.dp))
                 }
 
-                Spacer(modifier = Modifier.width(4.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(
+                        onClick = { ClipboardHelper.copyText(context, wish.text) },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ContentCopy,
+                            contentDescription = "Copy wish",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(17.dp)
+                        )
+                    }
 
-                IconButton(
-                    onClick = { ShareHelper.shareWish(context, wish.text) },
-                    modifier = Modifier.size(32.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Share,
-                        contentDescription = "Share wish",
-                        tint = HolidayCrimson,
-                        modifier = Modifier.size(17.dp)
-                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+
+                    IconButton(
+                        onClick = { ShareHelper.shareWish(context, wish.text) },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Share,
+                            contentDescription = "Share wish",
+                            tint = HolidayCrimson,
+                            modifier = Modifier.size(17.dp)
+                        )
+                    }
                 }
             }
         }

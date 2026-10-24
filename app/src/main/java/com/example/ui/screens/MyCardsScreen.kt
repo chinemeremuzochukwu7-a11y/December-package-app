@@ -26,6 +26,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CardGiftcard
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
@@ -244,20 +245,18 @@ fun MyCardsScreen(
                     SavedCardItem(
                         card = cardEntity,
                         onShareClick = {
-                            val isPro = com.example.data.subscription.SubscriptionManager.isPro.value
-                            val shareText = buildString {
-                                if (cardEntity.showRecipient && cardEntity.recipientName.isNotBlank()) {
-                                    append("To ${cardEntity.recipientName}:\n\n")
-                                }
-                                append(cardEntity.message)
-                                if (cardEntity.showSender && cardEntity.senderName.isNotBlank()) {
-                                    append("\n\nFrom: ${cardEntity.senderName}")
-                                }
-                                if (!isPro) {
-                                    append("\n\n✨ Made with Holiday Wishes 🎄")
-                                }
+                            com.example.utils.ShareHelper.shareCard(
+                                context = context,
+                                title = cardEntity.title,
+                                recipient = if (cardEntity.showRecipient) cardEntity.recipientName else "",
+                                message = cardEntity.message,
+                                sender = if (cardEntity.showSender) cardEntity.senderName else ""
+                            )
+                        },
+                        onRegenerateText = {
+                            viewModel.regenerateSavedCardTextWithAi(cardEntity.id) {
+                                Toast.makeText(context, "Card text regenerated with AI! ✨", Toast.LENGTH_SHORT).show()
                             }
-                            com.example.utils.ShareHelper.shareWish(context, shareText, "Holiday Greeting Card")
                         },
                         onSaveImageClick = {
                             if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P) {
@@ -389,22 +388,56 @@ fun MyCardsScreen(
 
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.End
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    IconButton(
+                                    Surface(
                                         onClick = {
-                                            ClipboardHelper.copyText(context, wish.text)
-                                            Toast.makeText(context, "Wish copied to clipboard! 📋", Toast.LENGTH_SHORT).show()
-                                        }
+                                            viewModel.regenerateFavoriteWishWithAi(wish.id) {
+                                                Toast.makeText(context, "Saved wish regenerated with AI! ✨", Toast.LENGTH_SHORT).show()
+                                            }
+                                        },
+                                        shape = RoundedCornerShape(10.dp),
+                                        color = HolidayGold.copy(alpha = 0.16f),
+                                        border = BorderStroke(1.dp, HolidayGold.copy(alpha = 0.5f)),
+                                        modifier = Modifier.testTag("regenerate_saved_wish_${wish.id}")
                                     ) {
-                                        Icon(Icons.Default.ContentCopy, contentDescription = "Copy")
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.AutoAwesome,
+                                                contentDescription = "Regenerate with AI",
+                                                tint = HolidayGold,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text(
+                                                text = "AI Regenerate",
+                                                fontSize = 11.5.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = HolidayGold
+                                            )
+                                        }
                                     }
-                                    IconButton(
-                                        onClick = {
-                                            ShareHelper.shareWish(context, wish.text, "Holiday Wish")
+
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        IconButton(
+                                            onClick = {
+                                                ClipboardHelper.copyText(context, wish.text)
+                                                Toast.makeText(context, "Wish copied to clipboard! 📋", Toast.LENGTH_SHORT).show()
+                                            }
+                                        ) {
+                                            Icon(Icons.Default.ContentCopy, contentDescription = "Copy")
                                         }
-                                    ) {
-                                        Icon(Icons.Default.Share, contentDescription = "Share")
+                                        IconButton(
+                                            onClick = {
+                                                ShareHelper.shareWish(context, wish.text, "Holiday Wish")
+                                            }
+                                        ) {
+                                            Icon(Icons.Default.Share, contentDescription = "Share")
+                                        }
                                     }
                                 }
                             }
@@ -451,6 +484,7 @@ fun MyCardsScreen(
 private fun SavedCardItem(
     card: SavedCardEntity,
     onShareClick: () -> Unit,
+    onRegenerateText: () -> Unit,
     onSaveImageClick: () -> Unit,
     onDeleteClick: () -> Unit
 ) {
@@ -504,7 +538,33 @@ private fun SavedCardItem(
                 modifier = Modifier.height(260.dp)
             )
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // AI Regenerate Card Message Button
+            Button(
+                onClick = onRegenerateText,
+                colors = ButtonDefaults.buttonColors(containerColor = HolidayGold),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("regenerate_saved_card_${card.id}")
+            ) {
+                Icon(
+                    imageVector = Icons.Default.AutoAwesome,
+                    contentDescription = null,
+                    tint = Color(0xFF3E2C00),
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "Regenerate Text with AI ✨",
+                    color = Color(0xFF3E2C00),
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.5.sp
+                )
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
 
             // Action Buttons Row: Share, Save Image, Delete
             Row(

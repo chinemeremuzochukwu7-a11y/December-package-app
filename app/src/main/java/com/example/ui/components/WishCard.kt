@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Lock
@@ -60,7 +61,8 @@ fun WishCard(
     wish: Wish,
     isFavorite: Boolean,
     onToggleFavorite: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onRegenerate: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     val activity = context as? Activity
@@ -182,57 +184,109 @@ fun WishCard(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Footer Actions: Copy, Share, Favorite
+                // Footer Actions: Regenerate with AI, Copy, Share, Favorite
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
+                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Copy Button
-                    IconButton(
-                        onClick = {
-                            ClipboardHelper.copyText(context, wish.text)
-                        },
-                        modifier = Modifier.testTag("copy_wish_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.ContentCopy,
-                            contentDescription = "Copy wish",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(20.dp)
-                        )
+                    if (onRegenerate != null) {
+                        Surface(
+                            onClick = {
+                                onRegenerate()
+                                Toast.makeText(context, "Regenerated wish with AI! ✨", Toast.LENGTH_SHORT).show()
+                            },
+                            shape = RoundedCornerShape(12.dp),
+                            color = HolidayGold.copy(alpha = 0.16f),
+                            border = BorderStroke(1.dp, HolidayGold.copy(alpha = 0.55f)),
+                            modifier = Modifier.testTag("regenerate_wish_button_${wish.id}")
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.AutoAwesome,
+                                    contentDescription = "Regenerate with AI",
+                                    tint = HolidayGold,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Spacer(modifier = Modifier.width(5.dp))
+                                Text(
+                                    text = "AI Regenerate",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = HolidayGold
+                                )
+                            }
+                        }
+                    } else {
+                        Spacer(modifier = Modifier.width(1.dp))
                     }
 
-                    Spacer(modifier = Modifier.width(4.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        // Copy Button
+                        IconButton(
+                            onClick = {
+                                ClipboardHelper.copyText(context, wish.text)
+                            },
+                            modifier = Modifier.testTag("copy_wish_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ContentCopy,
+                                contentDescription = "Copy wish",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
 
-                    // Share Button
-                    IconButton(
-                        onClick = {
-                            ShareHelper.shareWish(context, wish.text, "Holiday Wish: ${wish.category.displayName}")
-                        },
-                        modifier = Modifier.testTag("share_wish_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Share,
-                            contentDescription = "Share wish",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
+                        Spacer(modifier = Modifier.width(4.dp))
 
-                    Spacer(modifier = Modifier.width(4.dp))
+                        // Share Button
+                        IconButton(
+                            onClick = {
+                                if (wish.isPro && !isProUser && !unlockedWishes.contains(wish.id)) {
+                                    if (activity != null) {
+                                        Toast.makeText(context, "Watch a quick ad to unlock and share this Pro wish! ✨", Toast.LENGTH_SHORT).show()
+                                        AdManager.showRewardedAd(
+                                            activity = activity,
+                                            onRewardEarned = {
+                                                monetizationManager.unlockWishViaRewardedAd(wish.id)
+                                                ShareHelper.shareWish(context, wish.text, "Holiday Wish: ${wish.category.displayName}")
+                                            }
+                                        )
+                                    } else {
+                                        monetizationManager.unlockWishViaRewardedAd(wish.id)
+                                        ShareHelper.shareWish(context, wish.text, "Holiday Wish: ${wish.category.displayName}")
+                                    }
+                                } else {
+                                    ShareHelper.shareWish(context, wish.text, "Holiday Wish: ${wish.category.displayName}")
+                                }
+                            },
+                            modifier = Modifier.testTag("share_wish_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Share,
+                                contentDescription = "Share wish",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
 
-                    // Favorite Button
-                    IconButton(
-                        onClick = onToggleFavorite,
-                        modifier = Modifier.testTag("favorite_wish_button")
-                    ) {
-                        Icon(
-                            imageVector = if (isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
-                            contentDescription = if (isFavorite) "Remove from favorites" else "Add to favorites",
-                            tint = favoriteColor,
-                            modifier = Modifier.size(22.dp)
-                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+
+                        // Favorite Button
+                        IconButton(
+                            onClick = onToggleFavorite,
+                            modifier = Modifier.testTag("favorite_wish_button")
+                        ) {
+                            Icon(
+                                imageVector = if (isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                                contentDescription = if (isFavorite) "Remove from favorites" else "Add to favorites",
+                                tint = favoriteColor,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
                     }
                 }
             } else {

@@ -39,10 +39,10 @@ import kotlinx.coroutines.flow.asStateFlow
 object AdManager {
     private const val TAG = "AdManager"
 
-    // Google Test Ad Unit IDs (replace with your real IDs once approved)
-    var BANNER_AD_UNIT_ID = "ca-app-pub-3940256099942544/6300978111"
-    var INTERSTITIAL_AD_UNIT_ID = "ca-app-pub-3940256099942544/1033173712"
-    var REWARDED_AD_UNIT_ID = "ca-app-pub-3940256099942544/5224354917"
+    // Production Ad Unit IDs provided by user
+    var BANNER_AD_UNIT_ID = "ca-app-pub-6322953088287505/4181550406"
+    var INTERSTITIAL_AD_UNIT_ID = "ca-app-pub-6322953088287505/5212480917"
+    var REWARDED_AD_UNIT_ID = "ca-app-pub-6322953088287505/5404052605"
 
     private var interstitialAd: InterstitialAd? = null
     private var rewardedAd: RewardedAd? = null
@@ -53,12 +53,17 @@ object AdManager {
     private val _isInterstitialAdLoaded = MutableStateFlow(false)
     val isInterstitialAdLoaded: StateFlow<Boolean> = _isInterstitialAdLoaded.asStateFlow()
 
+    @Volatile
+    private var isInitialized = false
+
     fun initialize(context: Context) {
+        if (isInitialized) return
         try {
             MobileAds.initialize(context) { status ->
                 Log.d(TAG, "AdMob MobileAds initialized: $status")
             }
-        } catch (e: Exception) {
+            isInitialized = true
+        } catch (e: Throwable) {
             Log.w(TAG, "Notice initializing MobileAds: ${e.message}")
         }
     }
@@ -67,6 +72,7 @@ object AdManager {
      * Preloads an Interstitial Ad on demand
      */
     fun loadInterstitialAd(context: Context) {
+        initialize(context)
         val adRequest = AdRequest.Builder().build()
         InterstitialAd.load(
             context,
@@ -92,6 +98,7 @@ object AdManager {
      * Shows the Interstitial Ad if available, then invokes onDismiss
      */
     fun showInterstitialAd(activity: Activity, onDismiss: () -> Unit = {}) {
+        initialize(activity)
         val ad = interstitialAd
         if (ad != null) {
             ad.fullScreenContentCallback = object : FullScreenContentCallback() {
@@ -121,6 +128,7 @@ object AdManager {
         onRewardEarned: (amount: Int) -> Unit = {},
         onDismiss: () -> Unit = {}
     ) {
+        initialize(activity)
         val ad = rewardedAd
         if (ad != null) {
             ad.fullScreenContentCallback = object : FullScreenContentCallback() {

@@ -142,7 +142,8 @@ fun WishesScreen(
                         WishCard(
                             wish = wish,
                             isFavorite = favoriteIds.contains(wish.id),
-                            onToggleFavorite = { viewModel.toggleFavorite(wish) }
+                            onToggleFavorite = { viewModel.toggleFavorite(wish) },
+                            onRegenerate = { viewModel.regenerateWishWithAi(wish) }
                         )
                     }
                 }

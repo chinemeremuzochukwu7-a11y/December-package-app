@@ -29,6 +29,10 @@ class FavoriteRepository(private val dao: FavoriteWishDao) {
         dao.insertFavorite(entity)
     }
 
+    suspend fun saveFavorite(entity: FavoriteWishEntity) {
+        dao.insertFavorite(entity)
+    }
+
     suspend fun removeFavorite(id: String) {
         dao.deleteFavoriteById(id)
     }

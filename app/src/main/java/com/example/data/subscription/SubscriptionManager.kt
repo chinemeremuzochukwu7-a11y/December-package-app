@@ -58,6 +58,10 @@ object SubscriptionManager : PurchasesUpdatedListener {
     private const val KEY_IS_PRO = "key_is_pro"
     private const val KEY_CREDITS = "key_credits"
     private const val KEY_ACTIVE_TIER = "key_active_tier"
+    private const val KEY_LAST_RESET_MONTH = "key_last_reset_month"
+    private const val KEY_LAST_DAILY_CLAIM_DATE = "key_last_daily_claim_date"
+    private const val KEY_IS_YEARLY = "key_is_yearly"
+    private const val KEY_YEARLY_UPGRADE_TIME = "key_yearly_upgrade_time"
 
     // Google Play Console Exact Subscription Product IDs
     const val PRODUCT_MONTHLY = "holiday_wishes_monthly"
@@ -73,17 +77,17 @@ object SubscriptionManager : PurchasesUpdatedListener {
         monthlyPrice = "$9.99 / month",
         yearlyPrice = "$79.00 / year ($6.58/mo)",
         monthlyCredits = 300,
-        yearlyCredits = 999999,
+        yearlyCredits = 3600,
         features = listOf(
-            "🪙 300 AI Credits included each month",
+            "🪙 300 AI Credits reset fresh each month",
             "Unlock all 1,000+ Pro Christmas, New Year & Season cards",
             "Unlock all 1,000+ Pro Wishes across all categories",
             "Remove all watermarks on cards & wishes",
-            "Full HD Card Download to Device Gallery",
+            "Full HD Card Download with custom size options",
             "No Ads Experience Across App"
         ),
         isRecommended = false,
-        yearlyBonusText = "Billed monthly at $9.99/mo with 300 credits included. Cancel anytime."
+        yearlyBonusText = "Billed monthly at $9.99/mo with 300 credits refreshed every month. Cancel anytime."
     )
 
     val PLAN_YEARLY = BillingPlan(
@@ -93,19 +97,19 @@ object SubscriptionManager : PurchasesUpdatedListener {
         monthlyPrice = "$9.99 / month",
         yearlyPrice = "$79.00 / year ($6.58/mo)",
         monthlyCredits = 300,
-        yearlyCredits = 999999,
+        yearlyCredits = 3600,
         features = listOf(
-            "✨ UNLIMITED AI Credits for 1 full year",
+            "✨ 300 AI Credits reset & added EVERY month for 1 full year",
             "Save 34% over monthly billing ($6.58/mo)",
             "Unlock all 1,000+ Pro Cards (500+ Season, Christmas & New Year)",
             "Unlock all 1,000+ Pro Wishes",
             "Remove all watermarks on cards & wishes",
-            "Full HD Card Download & Auto-Schedule delivery",
+            "Full HD Card Download with 4 aspect ratio sizes",
             "VIP Gold Crown & Luxury Themes",
             "Ad-Free for the full year"
         ),
         isRecommended = true,
-        yearlyBonusText = "BEST VALUE: Save 34%! Only $6.58/mo billed annually ($79/yr) • UNLIMITED CREDITS."
+        yearlyBonusText = "BEST VALUE: Save 34%! Only $6.58/mo ($79/yr) • 300 fresh credits every month for 1 year."
     )
 
     val AVAILABLE_PLANS = listOf(PLAN_MONTHLY, PLAN_YEARLY)
@@ -119,6 +123,9 @@ object SubscriptionManager : PurchasesUpdatedListener {
 
     private val _credits = MutableStateFlow(25) // 25 free starter credits
     val credits: StateFlow<Int> = _credits.asStateFlow()
+
+    private val _canClaimDailyCredit = MutableStateFlow(false)
+    val canClaimDailyCredit: StateFlow<Boolean> = _canClaimDailyCredit.asStateFlow()
 
     private val _activeTier = MutableStateFlow<String?>("Free")
     val activeTier: StateFlow<String?> = _activeTier.asStateFlow()
@@ -144,6 +151,9 @@ object SubscriptionManager : PurchasesUpdatedListener {
         if (dbId != null) {
             prefs?.edit()?.putString("firestore_db_id", dbId)?.apply()
         }
+
+        // Check and execute monthly credit reset and daily free reward eligibility
+        checkMonthlyResetAndDailyReward()
 
         try {
             val pendingPurchasesParams = PendingPurchasesParams.newBuilder()
@@ -280,7 +290,74 @@ object SubscriptionManager : PurchasesUpdatedListener {
     }
 
     fun isYearlySubscriber(): Boolean {
-        return prefs?.getBoolean("key_is_yearly", false) == true || _credits.value >= 99999
+        val isYearly = prefs?.getBoolean(KEY_IS_YEARLY, false) == true
+        val upgradeTime = prefs?.getLong(KEY_YEARLY_UPGRADE_TIME, 0L) ?: 0L
+        val oneYearMillis = 365L * 24L * 60L * 60L * 1000L
+        return isYearly && (upgradeTime == 0L || (System.currentTimeMillis() - upgradeTime) <= oneYearMillis)
+    }
+
+    /**
+     * Checks if the month has rolled over. If so, resets user credits:
+     * - Yearly subscribers get 300 credits every month for 1 full year.
+     * - Monthly Pro subscribers get 300 credits every month.
+     * - Free users reset to 25 starter credits.
+     * Also checks if user is eligible to claim their 1 daily free credit.
+     */
+    fun checkMonthlyResetAndDailyReward() {
+        val prefsRef = prefs ?: return
+        val currentMonth = java.text.SimpleDateFormat("yyyy-MM", java.util.Locale.US).format(java.util.Date())
+        val todayDate = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
+
+        val lastResetMonth = prefsRef.getString(KEY_LAST_RESET_MONTH, null)
+        val isYearly = prefsRef.getBoolean(KEY_IS_YEARLY, false)
+        val upgradeTime = prefsRef.getLong(KEY_YEARLY_UPGRADE_TIME, 0L)
+        val oneYearMillis = 365L * 24L * 60L * 60L * 1000L
+        val isYearlyActive = isYearly && (upgradeTime == 0L || (System.currentTimeMillis() - upgradeTime) <= oneYearMillis)
+
+        if (lastResetMonth == null || lastResetMonth != currentMonth) {
+            if (isYearlyActive) {
+                // For yearly upgrades: always reset and add 300 fresh credits every month for 1 year
+                setCreditsDirect(300)
+            } else if (_isPro.value) {
+                setCreditsDirect(300)
+            } else {
+                setCreditsDirect(25)
+            }
+            prefsRef.edit().putString(KEY_LAST_RESET_MONTH, currentMonth).apply()
+        }
+
+        // Daily Free Credit claim check (1 free credit per day upon entering)
+        val lastDailyClaimDate = prefsRef.getString(KEY_LAST_DAILY_CLAIM_DATE, null)
+        _canClaimDailyCredit.value = (lastDailyClaimDate != todayDate)
+    }
+
+    /**
+     * Claims the daily free credit (1 credit per day)
+     */
+    fun claimDailyCredit(): Boolean {
+        val prefsRef = prefs ?: return false
+        val todayDate = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
+        val lastClaim = prefsRef.getString(KEY_LAST_DAILY_CLAIM_DATE, null)
+        if (lastClaim != todayDate) {
+            addCredits(1)
+            prefsRef.edit().putString(KEY_LAST_DAILY_CLAIM_DATE, todayDate).apply()
+            _canClaimDailyCredit.value = false
+            return true
+        }
+        return false
+    }
+
+    private fun setCreditsDirect(amount: Int) {
+        _credits.value = amount
+        prefs?.edit()?.putInt(KEY_CREDITS, amount)?.apply()
+        val userId = prefs?.getString("current_user_id", null)
+            ?: com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+        if (userId != null) {
+            val databaseId = prefs?.getString("firestore_db_id", null)
+            val db = if (databaseId != null) com.google.firebase.firestore.FirebaseFirestore.getInstance(databaseId)
+            else com.google.firebase.firestore.FirebaseFirestore.getInstance()
+            db.collection("users").document(userId).update("credits", amount)
+        }
     }
 
     /**
@@ -288,21 +365,26 @@ object SubscriptionManager : PurchasesUpdatedListener {
      */
     private fun simulatePurchaseSuccess(plan: BillingPlan, isYearly: Boolean) {
         _isPro.value = true
+        val currentMonth = java.text.SimpleDateFormat("yyyy-MM", java.util.Locale.US).format(java.util.Date())
         if (isYearly) {
-            _credits.value = 999999
-            _activeTier.value = "Holiday Pro Yearly (Unlimited)"
+            _credits.value = 300
+            _activeTier.value = "Holiday Pro Yearly (300 Credits/mo for 1 Year)"
             prefs?.edit()
                 ?.putBoolean(KEY_IS_PRO, true)
-                ?.putBoolean("key_is_yearly", true)
-                ?.putInt(KEY_CREDITS, 999999)
+                ?.putBoolean(KEY_IS_YEARLY, true)
+                ?.putLong(KEY_YEARLY_UPGRADE_TIME, System.currentTimeMillis())
+                ?.putString(KEY_LAST_RESET_MONTH, currentMonth)
+                ?.putInt(KEY_CREDITS, 300)
                 ?.putString(KEY_ACTIVE_TIER, _activeTier.value)
                 ?.apply()
         } else {
-            addCredits(300)
-            _activeTier.value = "Holiday Pro Monthly (300 Credits)"
+            _credits.value = 300
+            _activeTier.value = "Holiday Pro Monthly (300 Credits/mo)"
             prefs?.edit()
                 ?.putBoolean(KEY_IS_PRO, true)
-                ?.putBoolean("key_is_yearly", false)
+                ?.putBoolean(KEY_IS_YEARLY, false)
+                ?.putString(KEY_LAST_RESET_MONTH, currentMonth)
+                ?.putInt(KEY_CREDITS, 300)
                 ?.putString(KEY_ACTIVE_TIER, _activeTier.value)
                 ?.apply()
         }
@@ -324,7 +406,30 @@ object SubscriptionManager : PurchasesUpdatedListener {
     private fun handlePurchase(purchase: Purchase) {
         if (purchase.purchaseState == Purchase.PurchaseState.PURCHASED) {
             _isPro.value = true
-            prefs?.edit()?.putBoolean(KEY_IS_PRO, true)?.apply()
+            val isYearly = purchase.products.contains(PRODUCT_YEARLY)
+            val currentMonth = java.text.SimpleDateFormat("yyyy-MM", java.util.Locale.US).format(java.util.Date())
+            if (isYearly) {
+                _credits.value = 300
+                _activeTier.value = "Holiday Pro Yearly (300 Credits/mo for 1 Year)"
+                prefs?.edit()
+                    ?.putBoolean(KEY_IS_PRO, true)
+                    ?.putBoolean(KEY_IS_YEARLY, true)
+                    ?.putLong(KEY_YEARLY_UPGRADE_TIME, System.currentTimeMillis())
+                    ?.putString(KEY_LAST_RESET_MONTH, currentMonth)
+                    ?.putInt(KEY_CREDITS, 300)
+                    ?.putString(KEY_ACTIVE_TIER, _activeTier.value)
+                    ?.apply()
+            } else {
+                _credits.value = 300
+                _activeTier.value = "Holiday Pro Monthly (300 Credits/mo)"
+                prefs?.edit()
+                    ?.putBoolean(KEY_IS_PRO, true)
+                    ?.putBoolean(KEY_IS_YEARLY, false)
+                    ?.putString(KEY_LAST_RESET_MONTH, currentMonth)
+                    ?.putInt(KEY_CREDITS, 300)
+                    ?.putString(KEY_ACTIVE_TIER, _activeTier.value)
+                    ?.apply()
+            }
 
             val client = billingClient ?: return
             if (!purchase.isAcknowledged) {

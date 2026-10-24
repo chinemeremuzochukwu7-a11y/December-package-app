@@ -40,6 +40,7 @@ enum class AiTone(val displayName: String) {
     FUNNY("Funny"),
     EMOTIONAL("Emotional"),
     INSPIRATIONAL("Inspirational"),
+    POETIC("Poetic"),
     PROFESSIONAL("Professional"),
     SHORT("Short"),
     PRAYERFUL("Prayerful")
