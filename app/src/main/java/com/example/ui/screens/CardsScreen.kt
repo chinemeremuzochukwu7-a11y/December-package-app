@@ -363,16 +363,11 @@ fun CardsScreen(
                     customMessage = customMsg,
                     isUnlocked = isUnlocked,
                     onCustomizeClick = {
-                        if (isUnlocked) {
-                            viewModel.prepareCardForCustomization(template)
-                            onNavigateToCustomize(template)
-                        } else {
-                            proDialogTargetTemplate = template
-                            showProUpgradeDialog = true
-                        }
+                        viewModel.prepareCardForCustomization(template)
+                        onNavigateToCustomize(template)
                     },
                     onQuickShareClick = {
-                        if (!isUnlocked) {
+                        if (template.isPro && !isUnlocked) {
                             rewardedAdTemplate = template
                             Toast.makeText(context, "Watch a short ad to unlock and share this Pro card! 🎁", Toast.LENGTH_SHORT).show()
                         } else {
@@ -384,11 +379,6 @@ fun CardsScreen(
                                 sender = "",
                                 template = template
                             )
-                        }
-                    },
-                    onRegenerateText = {
-                        viewModel.regenerateCardTemplateDefaultMessage(template) {
-                            Toast.makeText(context, "Card text regenerated with AI! ✨", Toast.LENGTH_SHORT).show()
                         }
                     }
                 )
@@ -426,14 +416,22 @@ fun CardsScreen(
 
     // Rewarded Ad Dialog (AdMob simulation with real unlock grant)
     if (rewardedAdTemplate != null) {
+        val target = rewardedAdTemplate!!
+        val customMsg = customTemplateMessages[target.id]
         RewardedAdDialog(
-            template = rewardedAdTemplate!!,
+            template = target,
             onRewardEarned = {
-                val unlocked = rewardedAdTemplate!!
-                viewModel.unlockCardViaRewardedAd(unlocked.id)
-                Toast.makeText(context, "🎉 ${unlocked.title} unlocked for free!", Toast.LENGTH_SHORT).show()
-                viewModel.prepareCardForCustomization(unlocked)
-                onNavigateToCustomize(unlocked)
+                viewModel.unlockCardViaRewardedAd(target.id)
+                Toast.makeText(context, "🎉 ${target.title} unlocked! Sharing now...", Toast.LENGTH_SHORT).show()
+                ShareHelper.shareCard(
+                    context = context,
+                    title = target.title,
+                    recipient = "",
+                    message = customMsg ?: target.defaultMessage,
+                    sender = "",
+                    template = target
+                )
+                rewardedAdTemplate = null
             },
             onDismiss = {
                 rewardedAdTemplate = null
@@ -441,23 +439,81 @@ fun CardsScreen(
         )
     }
 
+    var showAiCreationCreditDialog by remember { mutableStateOf(false) }
+
     // AI Card Creator Dialog
     if (showAiCardCreationDialog) {
         CreateCardWithAiDialog(
             onDismiss = { showAiCardCreationDialog = false },
             onCreateCard = { occasion, recipient, sender, tone, themeStyle, length, prompt, photoUri ->
-                val template = viewModel.createCardWithAi(
-                    occasion = occasion,
-                    recipientName = recipient,
-                    senderName = sender,
-                    tone = tone,
-                    themeStyle = themeStyle,
-                    length = length,
-                    customPrompt = prompt,
-                    photoUri = photoUri
+                val cost = com.example.data.subscription.SubscriptionManager.CARD_CREATION_CREDIT_COST
+                if (!com.example.data.subscription.SubscriptionManager.hasEnoughCredits(cost)) {
+                    showAiCreationCreditDialog = true
+                } else {
+                    val deducted = com.example.data.subscription.SubscriptionManager.useCredits(cost)
+                    if (deducted) {
+                        showAiCardCreationDialog = false
+                        Toast.makeText(context, "✨ 25 credits used for AI card creation! (Balance: ${com.example.data.subscription.SubscriptionManager.credits.value})", Toast.LENGTH_SHORT).show()
+                        val template = viewModel.createCardWithAi(
+                            occasion = occasion,
+                            recipientName = recipient,
+                            senderName = sender,
+                            tone = tone,
+                            themeStyle = themeStyle,
+                            length = length,
+                            customPrompt = prompt,
+                            photoUri = photoUri
+                        )
+                        onNavigateToCustomize(template)
+                    } else {
+                        showAiCreationCreditDialog = true
+                    }
+                }
+            }
+        )
+    }
+
+    if (showAiCreationCreditDialog) {
+        val currentCredits by com.example.data.subscription.SubscriptionManager.credits.collectAsStateWithLifecycle()
+        AlertDialog(
+            onDismissRequest = { showAiCreationCreditDialog = false },
+            title = {
+                Text("Need Credits to Create Card 🎨", fontWeight = FontWeight.Bold)
+            },
+            text = {
+                Text(
+                    "Creating a card with AI costs 25 credits. Your current balance is $currentCredits credits.\n\nWatch a short rewarded ad to earn credits, or upgrade to Pro for unlimited card creation!"
                 )
-                Toast.makeText(context, "AI card crafted! Opening customizer ✨", Toast.LENGTH_SHORT).show()
-                onNavigateToCustomize(template)
+            },
+            confirmButton = {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = {
+                            showAiCreationCreditDialog = false
+                            val act = context as? android.app.Activity
+                            if (act != null) {
+                                com.example.data.ads.AdManager.showRewardedAd(act)
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = HolidayCrimson)
+                    ) {
+                        Text("Watch Ad (+1)")
+                    }
+                    Button(
+                        onClick = {
+                            showAiCreationCreditDialog = false
+                            showProUpgradeDialog = true
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = HolidayGold)
+                    ) {
+                        Text("Upgrade Pro", color = Color(0xFF332000), fontWeight = FontWeight.Bold)
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAiCreationCreditDialog = false }) {
+                    Text("Cancel")
+                }
             }
         )
     }
@@ -469,8 +525,7 @@ private fun GridCardTemplateItem(
     customMessage: String?,
     isUnlocked: Boolean,
     onCustomizeClick: () -> Unit,
-    onQuickShareClick: () -> Unit,
-    onRegenerateText: () -> Unit
+    onQuickShareClick: () -> Unit
 ) {
     val displayTemplate = remember(template, customMessage) {
         if (customMessage != null) template.copy(defaultMessage = customMessage) else template
@@ -489,7 +544,7 @@ private fun GridCardTemplateItem(
         elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
-            // Card Preview inside grid with lock indicator if locked
+            // Card Preview inside grid displaying the card with its festive text
             Box(modifier = Modifier.fillMaxWidth()) {
                 CardPreviewView(
                     template = displayTemplate,
@@ -517,7 +572,7 @@ private fun GridCardTemplateItem(
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = if (isUnlocked) "PRO UNLOCKED" else "PRO EXCLUSIVE",
+                                text = if (isUnlocked) "PRO UNLOCKED" else "PRO",
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = if (isUnlocked) Color.White else HolidayGold
@@ -527,50 +582,9 @@ private fun GridCardTemplateItem(
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-            // Quick AI Regenerate text button on card
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Don't like this text?",
-                    fontSize = 11.5.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Surface(
-                    onClick = onRegenerateText,
-                    shape = RoundedCornerShape(10.dp),
-                    color = HolidayGold.copy(alpha = 0.16f),
-                    border = BorderStroke(1.dp, HolidayGold.copy(alpha = 0.6f)),
-                    modifier = Modifier.testTag("regenerate_card_template_${template.id}")
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.AutoAwesome,
-                            contentDescription = "Regenerate with AI",
-                            tint = Color(0xFF6B4E00),
-                            modifier = Modifier.size(13.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = "Regenerate with AI ✨",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF6B4E00)
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // Action Buttons: Customize & Quick Share
+            // Action Buttons: Place to tap Customize and Share
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -578,24 +592,24 @@ private fun GridCardTemplateItem(
                 Button(
                     onClick = onCustomizeClick,
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = if (!isUnlocked) HolidayGold else HolidayCrimson
+                        containerColor = HolidayCrimson
                     ),
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier
-                        .weight(1.3f)
+                        .weight(1.2f)
                         .testTag("customize_button_${template.id}")
                 ) {
                     Icon(
-                        imageVector = if (!isUnlocked) Icons.Default.Lock else Icons.Default.Edit,
+                        imageVector = Icons.Default.Edit,
                         contentDescription = null,
-                        tint = if (!isUnlocked) Color(0xFF332000) else Color.White,
+                        tint = Color.White,
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = if (!isUnlocked) "Unlock PRO" else "Customize",
+                        text = "Customize",
                         fontWeight = FontWeight.Bold,
-                        color = if (!isUnlocked) Color(0xFF332000) else Color.White,
+                        color = Color.White,
                         fontSize = 13.5.sp
                     )
                 }
@@ -603,21 +617,24 @@ private fun GridCardTemplateItem(
                 OutlinedButton(
                     onClick = onQuickShareClick,
                     shape = RoundedCornerShape(12.dp),
-                    border = BorderStroke(1.dp, HolidayCrimson),
+                    border = BorderStroke(1.2.dp, if (template.isPro && !isUnlocked) HolidayGold else HolidayCrimson),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        containerColor = if (template.isPro && !isUnlocked) HolidayGold.copy(alpha = 0.12f) else Color.Transparent
+                    ),
                     modifier = Modifier
                         .weight(1f)
                         .testTag("share_card_button_${template.id}")
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Share,
+                        imageVector = if (template.isPro && !isUnlocked) Icons.Default.Lock else Icons.Default.Share,
                         contentDescription = null,
-                        tint = HolidayCrimson,
+                        tint = if (template.isPro && !isUnlocked) Color(0xFF6B4E00) else HolidayCrimson,
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = "Share",
-                        color = HolidayCrimson,
+                        text = if (template.isPro && !isUnlocked) "Share 🎁" else "Share",
+                        color = if (template.isPro && !isUnlocked) Color(0xFF6B4E00) else HolidayCrimson,
                         fontWeight = FontWeight.Bold,
                         fontSize = 13.sp
                     )
@@ -918,7 +935,7 @@ fun CreateCardWithAiDialog(
             ) {
                 Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(6.dp))
-                Text("Generate Card ✨", fontWeight = FontWeight.Bold)
+                Text("Generate Card (25 Credits) ✨", fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {

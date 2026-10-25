@@ -52,7 +52,8 @@ object SubscriptionManager : PurchasesUpdatedListener {
     private const val TAG = "SubscriptionManager"
     private const val PREFS_NAME = "holiday_wishes_billing_prefs"
     const val WISH_CREATION_CREDIT_COST = 10
-    const val CARD_CREATION_CREDIT_COST = 15
+    const val CARD_CREATION_CREDIT_COST = 25
+    const val REGENERATE_TEXT_CREDIT_COST = 15
     const val REWARDED_AD_CREDIT_REWARD = 1
 
     private const val KEY_IS_PRO = "key_is_pro"

@@ -16,6 +16,7 @@ import com.example.data.repository.MonetizationManager
 import com.example.data.repository.PricingTiers
 import com.example.data.repository.WishGenerator
 import com.example.data.repository.WishesRepository
+import com.example.data.subscription.SubscriptionManager
 import com.example.model.AiLanguage
 import com.example.model.AiOccasion
 import com.example.model.AiRecipient
@@ -628,10 +629,21 @@ class HolidayViewModel(application: Application) : AndroidViewModel(application)
     }
 
     /**
-     * Regenerates a wish with fresh AI-generated message.
+     * Regenerates a wish with fresh AI-generated message (15 credits).
+     * Checks user credit balance and deducts 15 credits.
      * Updates the UI instantly, and updates Room DB if the wish was saved to favorites.
      */
-    fun regenerateWishWithAi(wish: Wish, onComplete: ((String) -> Unit)? = null) {
+    fun regenerateWishWithAi(
+        wish: Wish, 
+        onComplete: ((String) -> Unit)? = null,
+        onInsufficientCredits: (() -> Unit)? = null
+    ): Boolean {
+        val cost = SubscriptionManager.REGENERATE_TEXT_CREDIT_COST
+        if (!SubscriptionManager.hasEnoughCredits(cost)) {
+            onInsufficientCredits?.invoke()
+            return false
+        }
+        SubscriptionManager.useCredits(cost)
         viewModelScope.launch {
             val newText = aiWishRepository.regenerateWishText(
                 category = wish.category,
@@ -647,12 +659,24 @@ class HolidayViewModel(application: Application) : AndroidViewModel(application)
             }
             onComplete?.invoke(newText)
         }
+        return true
     }
 
     /**
-     * Regenerates a saved favorite wish in Room DB with fresh AI text.
+     * Regenerates a saved favorite wish in Room DB with fresh AI text (15 credits).
+     * Checks user credit balance and deducts 15 credits.
      */
-    fun regenerateFavoriteWishWithAi(favoriteId: String, onComplete: ((String) -> Unit)? = null) {
+    fun regenerateFavoriteWishWithAi(
+        favoriteId: String, 
+        onComplete: ((String) -> Unit)? = null,
+        onInsufficientCredits: (() -> Unit)? = null
+    ): Boolean {
+        val cost = SubscriptionManager.REGENERATE_TEXT_CREDIT_COST
+        if (!SubscriptionManager.hasEnoughCredits(cost)) {
+            onInsufficientCredits?.invoke()
+            return false
+        }
+        SubscriptionManager.useCredits(cost)
         viewModelScope.launch {
             val fav = favorites.value.find { it.id == favoriteId } ?: return@launch
             val category = try {
@@ -669,17 +693,26 @@ class HolidayViewModel(application: Application) : AndroidViewModel(application)
             _regeneratedWishTexts.value = _regeneratedWishTexts.value + (favoriteId to newText)
             onComplete?.invoke(newText)
         }
+        return true
     }
 
     /**
-     * Regenerates the active custom card message in CustomizeCardScreen with AI.
+     * Regenerates the active custom card message in CustomizeCardScreen with AI (15 credits).
+     * Checks user credit balance and deducts 15 credits.
      */
     fun regenerateCardMessageWithAi(
         tone: AiTone? = null,
         length: AiWishLength? = null,
         customPrompt: String? = null,
-        onSuccess: ((String) -> Unit)? = null
-    ) {
+        onSuccess: ((String) -> Unit)? = null,
+        onInsufficientCredits: (() -> Unit)? = null
+    ): Boolean {
+        val cost = SubscriptionManager.REGENERATE_TEXT_CREDIT_COST
+        if (!SubscriptionManager.hasEnoughCredits(cost)) {
+            onInsufficientCredits?.invoke()
+            return false
+        }
+        SubscriptionManager.useCredits(cost)
         val selectedTone = tone ?: _cardAiTone.value
         val selectedLength = length ?: _cardAiLength.value
         val selectedPrompt = customPrompt ?: _cardAiCustomPrompt.value
@@ -705,12 +738,24 @@ class HolidayViewModel(application: Application) : AndroidViewModel(application)
                 _cardAiIsGenerating.value = false
             }
         }
+        return true
     }
 
     /**
-     * Regenerates the default message of a card template in CardsScreen grid.
+     * Regenerates the default message of a card template in CardsScreen grid (15 credits).
+     * Checks user credit balance and deducts 15 credits.
      */
-    fun regenerateCardTemplateDefaultMessage(template: CardTemplate, onComplete: ((String) -> Unit)? = null) {
+    fun regenerateCardTemplateDefaultMessage(
+        template: CardTemplate, 
+        onComplete: ((String) -> Unit)? = null,
+        onInsufficientCredits: (() -> Unit)? = null
+    ): Boolean {
+        val cost = SubscriptionManager.REGENERATE_TEXT_CREDIT_COST
+        if (!SubscriptionManager.hasEnoughCredits(cost)) {
+            onInsufficientCredits?.invoke()
+            return false
+        }
+        SubscriptionManager.useCredits(cost)
         viewModelScope.launch {
             val newText = aiWishRepository.generateCardGreeting(
                 occasion = template.occasion,
@@ -724,12 +769,24 @@ class HolidayViewModel(application: Application) : AndroidViewModel(application)
             _customCardTemplateMessages.value = _customCardTemplateMessages.value + (template.id to newText)
             onComplete?.invoke(newText)
         }
+        return true
     }
 
     /**
-     * Regenerates the text of a saved card in MyCardsScreen and updates Room DB.
+     * Regenerates the text of a saved card in MyCardsScreen and updates Room DB (15 credits).
+     * Checks user credit balance and deducts 15 credits.
      */
-    fun regenerateSavedCardTextWithAi(cardId: String, onComplete: ((String) -> Unit)? = null) {
+    fun regenerateSavedCardTextWithAi(
+        cardId: String, 
+        onComplete: ((String) -> Unit)? = null,
+        onInsufficientCredits: (() -> Unit)? = null
+    ): Boolean {
+        val cost = SubscriptionManager.REGENERATE_TEXT_CREDIT_COST
+        if (!SubscriptionManager.hasEnoughCredits(cost)) {
+            onInsufficientCredits?.invoke()
+            return false
+        }
+        SubscriptionManager.useCredits(cost)
         viewModelScope.launch {
             val card = savedCards.value.find { it.id == cardId } ?: return@launch
             val occasion = try {
@@ -749,6 +806,7 @@ class HolidayViewModel(application: Application) : AndroidViewModel(application)
             cardRepository.saveCard(card.copy(message = newText))
             onComplete?.invoke(newText)
         }
+        return true
     }
 
     /**

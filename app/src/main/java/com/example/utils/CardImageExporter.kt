@@ -134,9 +134,23 @@ object CardImageExporter {
         if (!photoUri.isNullOrBlank() && context != null) {
             try {
                 val inputUri = Uri.parse(photoUri)
-                val stream = context.contentResolver.openInputStream(inputUri)
-                val rawBitmap = android.graphics.BitmapFactory.decodeStream(stream)
-                stream?.close()
+                val rawBitmap = try {
+                    if (photoUri.startsWith("content://") || photoUri.startsWith("android.resource://")) {
+                        context.contentResolver.openInputStream(inputUri)?.use { stream ->
+                            android.graphics.BitmapFactory.decodeStream(stream)
+                        }
+                    } else if (photoUri.startsWith("file://")) {
+                        val path = inputUri.path
+                        if (path != null) android.graphics.BitmapFactory.decodeFile(path) else null
+                    } else {
+                        android.graphics.BitmapFactory.decodeFile(photoUri)
+                            ?: context.contentResolver.openInputStream(inputUri)?.use { stream ->
+                                android.graphics.BitmapFactory.decodeStream(stream)
+                            }
+                    }
+                } catch (e: Throwable) {
+                    null
+                }
                 if (rawBitmap != null) {
                     val frameDiameter = (width * 0.28f).coerceIn(160f * scale, 340f * scale)
                     val frameRadius = frameDiameter / 2f
@@ -336,9 +350,19 @@ object CardImageExporter {
                 putExtra(Intent.EXTRA_STREAM, uri)
                 putExtra(Intent.EXTRA_SUBJECT, cardTitle)
                 putExtra(Intent.EXTRA_TEXT, shareText)
+                clipData = android.content.ClipData.newRawUri("Holiday Card", uri)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
-            context.startActivity(Intent.createChooser(intent, "Share Holiday Greeting Card"))
+            val chooser = Intent.createChooser(intent, "Share Holiday Greeting Card")
+            chooser.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            try {
+                val resInfoList = context.packageManager.queryIntentActivities(intent, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)
+                for (resolveInfo in resInfoList) {
+                    val packageName = resolveInfo.activityInfo.packageName
+                    context.grantUriPermission(packageName, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+            } catch (ignored: Exception) {}
+            context.startActivity(chooser)
         } else {
             Toast.makeText(context, "Could not prepare card for sharing", Toast.LENGTH_SHORT).show()
         }

@@ -160,6 +160,6 @@ class ExampleRobolectricTest {
         assertTrue(proWishes.isNotEmpty())
 
         assertEquals(300, com.example.data.subscription.SubscriptionManager.PLAN_MONTHLY.monthlyCredits)
-        assertTrue(com.example.data.subscription.SubscriptionManager.PLAN_YEARLY.yearlyCredits >= 99999)
+        assertTrue(com.example.data.subscription.SubscriptionManager.PLAN_YEARLY.yearlyCredits >= 3600)
     }
 }

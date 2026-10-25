@@ -72,6 +72,19 @@ import com.example.data.subscription.SubscriptionManager
 import com.example.utils.ClipboardHelper
 import com.example.utils.ShareHelper
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.compose.foundation.border
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.material.icons.filled.AddPhotoAlternate
+import androidx.compose.material.icons.filled.Delete
+import coil.compose.AsyncImage
+import com.example.ui.components.CardPreviewView
+import com.example.data.repository.CardTemplatesRepository
+import com.example.utils.CardImageExporter
+
 @Composable
 fun CreateWishScreen(
     viewModel: HolidayViewModel,
@@ -84,6 +97,13 @@ fun CreateWishScreen(
     val personalMessage by viewModel.personalMessage.collectAsStateWithLifecycle()
     val generatedWishes by viewModel.generatedWishes.collectAsStateWithLifecycle()
     val favoriteIds by viewModel.favoriteIds.collectAsStateWithLifecycle()
+    var selectedWishPhotoUri by remember { mutableStateOf<String?>(null) }
+
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        selectedWishPhotoUri = uri?.toString()
+    }
 
     LazyColumn(
         modifier = modifier
@@ -254,6 +274,82 @@ fun CreateWishScreen(
             )
         }
 
+        // 6. Add Photo to Card
+        item {
+            Spacer(modifier = Modifier.height(14.dp))
+            SelectionSectionTitle("6. Add Photo Inside Card (Optional)")
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = BorderStroke(1.2.dp, if (selectedWishPhotoUri != null) HolidayPineGreen else MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)),
+                modifier = Modifier.fillMaxWidth().testTag("upload_wish_photo_card")
+            ) {
+                Row(
+                    modifier = Modifier.padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    if (selectedWishPhotoUri != null) {
+                        AsyncImage(
+                            model = selectedWishPhotoUri,
+                            contentDescription = "Uploaded Card Photo",
+                            modifier = Modifier
+                                .size(56.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .border(1.5.dp, HolidayGold, RoundedCornerShape(12.dp)),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .size(56.dp)
+                                .background(HolidayCrimson.copy(alpha = 0.1f), RoundedCornerShape(12.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.AddPhotoAlternate,
+                                contentDescription = null,
+                                tint = HolidayCrimson,
+                                modifier = Modifier.size(26.dp)
+                            )
+                        }
+                    }
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = if (selectedWishPhotoUri != null) "Photo Added to Card 📸" else "Upload Card Photo",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp
+                        )
+                        Text(
+                            text = if (selectedWishPhotoUri != null) "This photo will appear inside the card when shared" else "Add a picture to be embedded inside the holiday card",
+                            fontSize = 11.5.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    if (selectedWishPhotoUri != null) {
+                        IconButton(
+                            onClick = { selectedWishPhotoUri = null },
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(Icons.Default.Delete, contentDescription = "Remove photo", tint = Color.Red, modifier = Modifier.size(20.dp))
+                        }
+                    } else {
+                        Button(
+                            onClick = {
+                                photoPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = HolidayPineGreen),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Text("Upload", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
+
         // Generate Button
         item {
             Spacer(modifier = Modifier.height(20.dp))
@@ -316,6 +412,7 @@ fun CreateWishScreen(
             items(generatedWishes, key = { it.id }) { result ->
                 GeneratedWishCard(
                     result = result,
+                    photoUri = selectedWishPhotoUri,
                     isFavorite = favoriteIds.contains(result.id),
                     onToggleFavorite = { viewModel.toggleFavoriteGenerated(result) },
                     onRegenerate = { viewModel.regenerateGeneratedWish(result.id) }
@@ -347,11 +444,22 @@ private fun chipColors(isSelected: Boolean) = FilterChipDefaults.filterChipColor
 @Composable
 private fun GeneratedWishCard(
     result: WishGenerationResult,
+    photoUri: String? = null,
     isFavorite: Boolean,
     onToggleFavorite: () -> Unit,
     onRegenerate: () -> Unit
 ) {
     val context = LocalContext.current
+    val isProUser by SubscriptionManager.isPro.collectAsStateWithLifecycle()
+
+    val matchingTemplate = remember(result.occasion) {
+        when (result.occasion) {
+            GeneratorOccasion.CHRISTMAS -> CardTemplatesRepository.getChristmasTemplates().first()
+            GeneratorOccasion.NEW_YEAR -> CardTemplatesRepository.getNewYearTemplates().first()
+            GeneratorOccasion.HOLIDAY_SEASON -> CardTemplatesRepository.getSeasonTemplates().first()
+            else -> CardTemplatesRepository.getAllTemplates().first()
+        }
+    }
 
     Card(
         modifier = Modifier
@@ -362,8 +470,8 @@ private fun GeneratedWishCard(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
-        border = BorderStroke(1.dp, HolidayGold.copy(alpha = 0.5f)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+        border = BorderStroke(1.2.dp, if (photoUri != null) HolidayGold else HolidayGold.copy(alpha = 0.5f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
         Column(modifier = Modifier.padding(18.dp)) {
             Row(
@@ -397,18 +505,33 @@ private fun GeneratedWishCard(
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
-            Text(
-                text = result.wishText,
-                style = MaterialTheme.typography.bodyLarge.copy(
-                    lineHeight = 24.sp,
-                    fontSize = 15.sp
-                ),
-                color = MaterialTheme.colorScheme.onSurface
-            )
+            // Embedded Card Preview with photo if photo was uploaded
+            if (photoUri != null) {
+                CardPreviewView(
+                    template = matchingTemplate,
+                    customTitle = "${result.occasion.label} Greeting",
+                    recipientName = result.recipient.label,
+                    customMessage = result.wishText,
+                    senderName = "",
+                    photoUri = photoUri,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(270.dp)
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+            } else {
+                Text(
+                    text = result.wishText,
+                    style = MaterialTheme.typography.bodyLarge.copy(
+                        lineHeight = 24.sp,
+                        fontSize = 15.sp
+                    ),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
 
-            val isProUser by SubscriptionManager.isPro.collectAsStateWithLifecycle()
             if (!isProUser) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Surface(
@@ -446,102 +569,146 @@ private fun GeneratedWishCard(
                 )
             }
 
-            // Action Buttons Row: Download Wish, Schedule Auto-Send, Copy, Share
+            // Primary Card Sharing & Download Row
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Download Wish to Device
+                // Share Exact Card with Photo to Facebook, WhatsApp, etc.
                 Button(
                     onClick = {
-                        val imageSaved = WishExporter.saveWishAsImageToGallery(
+                        ShareHelper.shareCard(
                             context = context,
-                            wishText = result.wishText,
-                            occasionTitle = "${result.occasion.label} Wish",
-                            recipientName = result.recipient.label
+                            title = "${result.occasion.label} Greeting",
+                            recipient = result.recipient.label,
+                            message = result.wishText,
+                            sender = "",
+                            template = matchingTemplate,
+                            photoUri = photoUri
                         )
-                        WishExporter.saveWishAsTextFileToDownloads(
-                            context = context,
-                            wishText = result.wishText,
-                            occasionTitle = "${result.occasion.label} Wish"
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = HolidayCrimson),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.weight(1.3f).height(40.dp).testTag("share_card_with_photo_button")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Share,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(5.dp))
+                    Text(
+                        text = if (photoUri != null) "Share Card 📸" else "Share Card 🎨",
+                        color = Color.White,
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                // Download Card to Gallery
+                OutlinedButton(
+                    onClick = {
+                        val bitmap = CardImageExporter.renderCardBitmap(
+                            template = matchingTemplate,
+                            customTitle = "${result.occasion.label} Greeting",
+                            recipientName = result.recipient.label,
+                            customMessage = result.wishText,
+                            senderName = "",
+                            fontStyle = "Classic",
+                            isPro = isProUser,
+                            photoUri = photoUri,
+                            context = context
                         )
-                        if (imageSaved) {
-                            Toast.makeText(context, "Wish downloaded to your device Gallery & Downloads! 📥✨", Toast.LENGTH_LONG).show()
+                        val saved = CardImageExporter.saveBitmapToGallery(context, bitmap, "${result.occasion.label} Card")
+                        if (saved) {
+                            Toast.makeText(context, "Card with photo saved to Gallery! 📥✨", Toast.LENGTH_LONG).show()
                         } else {
-                            Toast.makeText(context, "Saved to device storage! 📥", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "Could not save card to gallery", Toast.LENGTH_SHORT).show()
                         }
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = HolidayPineGreen),
                     shape = RoundedCornerShape(10.dp),
-                    modifier = Modifier.weight(1f).height(38.dp)
+                    border = BorderStroke(1.dp, HolidayPineGreen),
+                    modifier = Modifier.weight(1f).height(40.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Download,
                         contentDescription = null,
+                        tint = HolidayPineGreen,
                         modifier = Modifier.size(15.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Download", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Text("Download", color = HolidayPineGreen, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 }
+            }
 
-                // Schedule Auto-Send to WhatsApp/Media
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Secondary Actions Row: Schedule, Copy Text, Share Text Only
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 OutlinedButton(
                     onClick = { showScheduleDialog = true },
                     shape = RoundedCornerShape(10.dp),
-                    border = BorderStroke(1.dp, HolidayCrimson),
-                    modifier = Modifier.weight(1f).height(38.dp)
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)),
+                    modifier = Modifier.height(34.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.AccessTime,
                         contentDescription = null,
-                        tint = HolidayCrimson,
-                        modifier = Modifier.size(15.dp)
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(14.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Schedule", color = HolidayCrimson, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Text("Schedule", fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
 
-                IconButton(
-                    onClick = {
-                        onRegenerate()
-                        Toast.makeText(context, "Wish regenerated with AI! ✨", Toast.LENGTH_SHORT).show()
-                    },
-                    modifier = Modifier.size(36.dp).testTag("regenerate_generated_button_${result.id}")
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.AutoAwesome,
-                        contentDescription = "Regenerate with AI",
-                        tint = HolidayGold,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    IconButton(
+                        onClick = {
+                            onRegenerate()
+                            Toast.makeText(context, "Wish regenerated with AI! ✨", Toast.LENGTH_SHORT).show()
+                        },
+                        modifier = Modifier.size(34.dp).testTag("regenerate_generated_button_${result.id}")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AutoAwesome,
+                            contentDescription = "Regenerate with AI",
+                            tint = HolidayGold,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
 
-                IconButton(
-                    onClick = {
-                        val textToCopy = if (isProUser) result.wishText else "${result.wishText}\n\n✨ Made with Holiday Wishes 🎄"
-                        ClipboardHelper.copyText(context, textToCopy)
-                    },
-                    modifier = Modifier.size(36.dp).testTag("copy_generated_button")
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.ContentCopy,
-                        contentDescription = "Copy",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
+                    IconButton(
+                        onClick = {
+                            val textToCopy = if (isProUser) result.wishText else "${result.wishText}\n\n✨ Made with Holiday Wishes 🎄"
+                            ClipboardHelper.copyText(context, textToCopy)
+                        },
+                        modifier = Modifier.size(34.dp).testTag("copy_generated_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ContentCopy,
+                            contentDescription = "Copy Text",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
 
-                IconButton(
-                    onClick = { ShareHelper.shareWish(context, result.wishText, "Holiday Wish") },
-                    modifier = Modifier.size(36.dp).testTag("share_generated_button")
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Share,
-                        contentDescription = "Share",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(18.dp)
-                    )
+                    IconButton(
+                        onClick = { ShareHelper.shareWish(context, result.wishText, "Holiday Wish") },
+                        modifier = Modifier.size(34.dp).testTag("share_text_generated_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Share,
+                            contentDescription = "Share Text",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                 }
             }
         }

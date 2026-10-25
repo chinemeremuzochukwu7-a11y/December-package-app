@@ -10,7 +10,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -285,7 +287,7 @@ fun CustomizeCardScreen(
             },
             text = {
                 Text(
-                    "Creating a card costs 15 credits. You currently have $credits credits.\n\nWatch a rewarded ad to earn 1 credit each, or upgrade to Pro for unlimited card creation!"
+                    "Creating a card with AI costs 25 credits, and regenerating text with AI costs 15 credits. You currently have $credits credits.\n\nWatch a rewarded ad to earn credits, or upgrade to Pro for unlimited card creation!"
                 )
             },
             confirmButton = {
@@ -733,7 +735,9 @@ fun CustomizeCardScreen(
                                         customMessage = customMessage,
                                         senderName = senderName,
                                         fontStyle = cardFontStyle,
-                                        isPro = isPro
+                                        isPro = isPro,
+                                        photoUri = cardPhotoUri,
+                                        context = context
                                     )
                                     val success = CardImageExporter.saveBitmapToGallery(context, pristineBitmap, template.title)
                                     if (success) {
@@ -1383,15 +1387,27 @@ fun CustomizeCardScreen(
                     // Holiday Photo Frame (Zero-Permission Photo Picker)
                     Column {
                         Text(
-                            text = "Add Your Photo to Card",
+                            text = "Add Photo Inside Card (Optional) 📸",
                             style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium
+                            fontWeight = FontWeight.Bold
                         )
                         Spacer(modifier = Modifier.height(6.dp))
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
+                            if (cardPhotoUri != null) {
+                                coil.compose.AsyncImage(
+                                    model = cardPhotoUri,
+                                    contentDescription = "Card Photo",
+                                    modifier = Modifier
+                                        .size(46.dp)
+                                        .clip(androidx.compose.foundation.shape.CircleShape)
+                                        .border(2.dp, HolidayGold, androidx.compose.foundation.shape.CircleShape),
+                                    contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                                )
+                            }
                             OutlinedButton(
                                 onClick = {
                                     photoPickerLauncher.launch(
@@ -1409,7 +1425,7 @@ fun CustomizeCardScreen(
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = if (cardPhotoUri != null) "Change Photo" else "Select Photo",
+                                    text = if (cardPhotoUri != null) "Change Photo 📸" else "Upload Card Photo 📸",
                                     color = HolidayPineGreen,
                                     fontSize = 12.5.sp,
                                     fontWeight = FontWeight.SemiBold
@@ -1538,7 +1554,8 @@ private fun shareCardAction(
     recipient: String,
     message: String,
     sender: String,
-    fontStyle: String = "Classic"
+    fontStyle: String = "Classic",
+    photoUri: String? = null
 ) {
     val isPro = com.example.data.subscription.SubscriptionManager.isPro.value
     val bitmap = CardImageExporter.renderCardBitmap(
@@ -1548,7 +1565,9 @@ private fun shareCardAction(
         customMessage = message,
         senderName = sender,
         fontStyle = fontStyle,
-        isPro = isPro
+        isPro = isPro,
+        photoUri = photoUri,
+        context = context
     )
     val shareText = buildString {
         if (recipient.isNotBlank()) append("To $recipient:\n\n")
