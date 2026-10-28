@@ -354,8 +354,23 @@ fun AiWishGeneratorScreen(
                 onGenerateAgain = onPerformGenerateWish,
                 onSaveWish = { text, occ -> viewModel.saveAiWishToFavorites(text, occ) },
                 onCreateCard = { text, name ->
-                    viewModel.prepareCardFromAiWish(text, name)
-                    onNavigateToCreateCard()
+                    val cost = SubscriptionManager.CARD_CREATION_CREDIT_COST
+                    if (isPro) {
+                        viewModel.prepareCardFromAiWish(text, name)
+                        onNavigateToCreateCard()
+                    } else {
+                        if (!SubscriptionManager.hasEnoughCredits(cost)) {
+                            showCreditDialog = true
+                        } else {
+                            if (SubscriptionManager.useCredits(cost)) {
+                                Toast.makeText(context, "✨ 25 credits used for AI card creation! (Balance: ${SubscriptionManager.credits.value})", Toast.LENGTH_SHORT).show()
+                                viewModel.prepareCardFromAiWish(text, name)
+                                onNavigateToCreateCard()
+                            } else {
+                                showCreditDialog = true
+                            }
+                        }
+                    }
                 },
                 onClearError = { viewModel.clearAiErrorMessage() }
             )
@@ -364,8 +379,23 @@ fun AiWishGeneratorScreen(
                 history = history,
                 onDelete = { viewModel.deleteAiWishHistory(it) },
                 onCreateCard = { text, name ->
-                    viewModel.prepareCardFromAiWish(text, name)
-                    onNavigateToCreateCard()
+                    val cost = SubscriptionManager.CARD_CREATION_CREDIT_COST
+                    if (isPro) {
+                        viewModel.prepareCardFromAiWish(text, name)
+                        onNavigateToCreateCard()
+                    } else {
+                        if (!SubscriptionManager.hasEnoughCredits(cost)) {
+                            showCreditDialog = true
+                        } else {
+                            if (SubscriptionManager.useCredits(cost)) {
+                                Toast.makeText(context, "✨ 25 credits used for AI card creation! (Balance: ${SubscriptionManager.credits.value})", Toast.LENGTH_SHORT).show()
+                                viewModel.prepareCardFromAiWish(text, name)
+                                onNavigateToCreateCard()
+                            } else {
+                                showCreditDialog = true
+                            }
+                        }
+                    }
                 },
                 onSaveWish = { text, occ -> viewModel.saveAiWishToFavorites(text, occ) }
             )

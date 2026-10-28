@@ -1,5 +1,6 @@
 package com.example.ui.components
 
+import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -23,6 +24,9 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PlayCircleOutline
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Wifi
+import androidx.compose.material.icons.filled.WifiOff
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -46,6 +50,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -57,6 +62,7 @@ import com.example.model.CardTemplate
 import com.example.ui.theme.HolidayCrimson
 import com.example.ui.theme.HolidayGold
 import com.example.ui.theme.HolidayPineGreen
+import com.example.utils.NetworkUtils
 
 @Composable
 fun ProUpgradeDialog(
@@ -66,7 +72,9 @@ fun ProUpgradeDialog(
     onRestorePurchases: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    val context = LocalContext.current
     var selectedTierId by remember { mutableStateOf(PricingTiers.ULTIMATE_VIP.id) }
+    var showNoNetworkDialog by remember { mutableStateOf(false) }
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -159,7 +167,45 @@ fun ProUpgradeDialog(
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                 )
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Network Status Indicator in Upgrade Dialog
+                val isConnected = NetworkUtils.isNetworkAvailable(context)
+                val connectionType = NetworkUtils.getNetworkTypeName(context)
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = if (isConnected) HolidayPineGreen.copy(alpha = 0.08f) else HolidayCrimson.copy(alpha = 0.08f),
+                    border = BorderStroke(
+                        1.dp,
+                        if (isConnected) HolidayPineGreen.copy(alpha = 0.35f) else HolidayCrimson.copy(alpha = 0.45f)
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("dialog_network_status_banner")
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = if (isConnected) Icons.Default.Wifi else Icons.Default.WifiOff,
+                            contentDescription = null,
+                            tint = if (isConnected) HolidayPineGreen else HolidayCrimson,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = if (isConnected) "Network Ready ($connectionType)" else "⚠️ Offline: Wi-Fi or Mobile Data Required",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isConnected) HolidayPineGreen else HolidayCrimson
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
 
                 // Plan 1: Monthly ($9.99/mo)
                 val monthlyTier = PricingTiers.PRO_MONTHLY
@@ -208,8 +254,13 @@ fun ProUpgradeDialog(
                 val isYearlySelected = selectedTierId == yearlyTier.id
                 Button(
                     onClick = {
-                        onPurchaseTier(selectedTierId)
-                        onDismiss()
+                        val isNetAvailable = NetworkUtils.isNetworkAvailable(context)
+                        if (!isNetAvailable) {
+                            showNoNetworkDialog = true
+                        } else {
+                            onPurchaseTier(selectedTierId)
+                            onDismiss()
+                        }
                     },
                     colors = ButtonDefaults.buttonColors(
                         containerColor = if (isYearlySelected) HolidayGold else HolidayCrimson
@@ -277,7 +328,14 @@ fun ProUpgradeDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     TextButton(
-                        onClick = onRestorePurchases,
+                        onClick = {
+                            val isNetAvailable = NetworkUtils.isNetworkAvailable(context)
+                            if (!isNetAvailable) {
+                                showNoNetworkDialog = true
+                            } else {
+                                onRestorePurchases()
+                            }
+                        },
                         modifier = Modifier.testTag("restore_purchases_button")
                     ) {
                         Text(
@@ -295,6 +353,54 @@ fun ProUpgradeDialog(
                 }
             }
         }
+    }
+
+    if (showNoNetworkDialog) {
+        AlertDialog(
+            onDismissRequest = { showNoNetworkDialog = false },
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.WifiOff,
+                    contentDescription = "No Internet",
+                    tint = HolidayCrimson,
+                    modifier = Modifier.size(36.dp)
+                )
+            },
+            title = {
+                Text(
+                    text = "Internet Connection Required",
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center
+                )
+            },
+            text = {
+                Text(
+                    text = "Please connect to Wi-Fi or turn on mobile cellular data to proceed with Google Play payment.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    textAlign = TextAlign.Center
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (NetworkUtils.isNetworkAvailable(context)) {
+                            showNoNetworkDialog = false
+                            Toast.makeText(context, "Connected to network!", Toast.LENGTH_SHORT).show()
+                        } else {
+                            Toast.makeText(context, "Still offline. Please connect to Wi-Fi or mobile data.", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = HolidayCrimson)
+                ) {
+                    Text("Check Connection")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showNoNetworkDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }
 

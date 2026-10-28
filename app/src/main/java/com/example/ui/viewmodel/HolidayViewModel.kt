@@ -601,6 +601,10 @@ class HolidayViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun purchaseProTier(tierId: String): Boolean {
+        val app = getApplication<android.app.Application>()
+        if (!com.example.utils.NetworkUtils.isNetworkAvailable(app)) {
+            return false
+        }
         return monetizationManager.completePurchase(tierId)
     }
 

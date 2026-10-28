@@ -7,6 +7,7 @@ import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
+import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -21,6 +22,7 @@ data class UserProfile(
     val displayName: String = "",
     val credits: Long = 25L,
     val isPro: Boolean = false,
+    val isYearly: Boolean = false,
     val createdAt: String = "",
     val updatedAt: String = ""
 )
@@ -50,9 +52,9 @@ class UserFirestoreRepository(private val db: FirebaseFirestore) {
         /**
          * Generates a permanent hardware-bound device signature.
          * Settings.Secure.ANDROID_ID is persistent across app reinstalls
-         * and clear data / clear storage actions on Android.
+         * and clear data / clear storage actions on Android (API 26+).
          */
-        private fun generatePermanentDeviceFingerprint(context: Context): String {
+        fun generatePermanentDeviceFingerprint(context: Context): String {
             return try {
                 val androidId = android.provider.Settings.Secure.getString(
                     context.contentResolver,
@@ -76,8 +78,9 @@ class UserFirestoreRepository(private val db: FirebaseFirestore) {
     }
 
     /**
-     * Initializes the user document in Firestore with anti-abuse protection.
-     * Prevents users from getting free credits repeatedly by clearing app storage.
+     * Initializes or restores the user document in Firestore with permanent hardware protection.
+     * Prevents users from losing credits on "Clear Data / Storage", and prevents free credit
+     * duplication abuse.
      */
     suspend fun ensureUserInitialized(
         userId: String,
@@ -91,13 +94,57 @@ class UserFirestoreRepository(private val db: FirebaseFirestore) {
 
             val snapshot = userDoc.get().await()
 
-            if (!snapshot.exists()) {
-                // Anti-Abuse Check: Has this physical device ALREADY claimed starter credits before?
+            if (snapshot.exists()) {
+                // 1. Existing user doc found: restore true persistent credit balance & Pro status!
+                val credits = snapshot.getLong("credits") ?: 0L
+                val isPro = snapshot.getBoolean("isPro") ?: false
+                val isYearly = snapshot.getBoolean("isYearly") ?: false
+                val lastDailyClaimDate = snapshot.getString("lastDailyClaimDate")
+                val lastResetMonth = snapshot.getString("lastResetMonth")
+
+                // Update hardware backup ledger
+                try {
+                    claimedDoc.set(
+                        mapOf(
+                            "deviceId" to userId,
+                            "currentCredits" to credits,
+                            "isPro" to isPro,
+                            "lastSyncedAt" to nowString
+                        ),
+                        SetOptions.merge()
+                    ).await()
+                } catch (_: Exception) {}
+
+                SubscriptionManager.syncWithFirestore(
+                    firestoreCredits = credits.toInt(),
+                    firestoreIsPro = isPro,
+                    isYearly = isYearly,
+                    lastDailyClaimDate = lastDailyClaimDate,
+                    lastResetMonth = lastResetMonth
+                )
+
+                UserProfile(
+                    userId = userId,
+                    email = snapshot.getString("email") ?: email,
+                    displayName = snapshot.getString("displayName") ?: displayName,
+                    credits = credits,
+                    isPro = isPro,
+                    isYearly = isYearly,
+                    createdAt = snapshot.getString("createdAt") ?: nowString,
+                    updatedAt = snapshot.getString("updatedAt") ?: nowString
+                )
+            } else {
+                // 2. User doc doesn't exist yet: check permanent claimed devices ledger
                 val claimSnapshot = try { claimedDoc.get().await() } catch (_: Exception) { null }
                 val hasAlreadyClaimed = claimSnapshot?.exists() == true
 
-                // If device already claimed previously (e.g. user cleared app data), DO NOT award credits again!
-                val starterCredits = if (hasAlreadyClaimed) 0L else 25L
+                val starterCredits = if (hasAlreadyClaimed) {
+                    // Previously claimed on this device, restore the recorded credit balance
+                    claimSnapshot?.getLong("currentCredits") ?: 0L
+                } else {
+                    // Brand new device: grant initial 25 credits
+                    25L
+                }
 
                 val initialProfile = UserProfile(
                     userId = userId,
@@ -105,6 +152,7 @@ class UserFirestoreRepository(private val db: FirebaseFirestore) {
                     displayName = displayName,
                     credits = starterCredits,
                     isPro = false,
+                    isYearly = false,
                     createdAt = nowString,
                     updatedAt = nowString
                 )
@@ -114,42 +162,31 @@ class UserFirestoreRepository(private val db: FirebaseFirestore) {
                     "displayName" to initialProfile.displayName,
                     "credits" to initialProfile.credits,
                     "isPro" to initialProfile.isPro,
+                    "isYearly" to initialProfile.isYearly,
                     "starterCreditClaimed" to true,
                     "createdAt" to initialProfile.createdAt,
                     "updatedAt" to initialProfile.updatedAt
                 )
-                userDoc.set(data).await()
+                userDoc.set(data, SetOptions.merge()).await()
 
-                // Mark device in permanent claimed ledger so clear storage can NEVER re-award credits
-                if (!hasAlreadyClaimed) {
-                    val claimRecord = hashMapOf(
-                        "deviceId" to userId,
-                        "claimedAt" to nowString,
-                        "initialCreditsGranted" to 25L
-                    )
-                    try { claimedDoc.set(claimRecord).await() } catch (_: Exception) {}
-                }
-
-                SubscriptionManager.syncWithFirestore(starterCredits.toInt(), false)
-                initialProfile
-            } else {
-                // Document already exists on Firestore! Restore real current balance.
-                val credits = snapshot.getLong("credits") ?: 0L
-                val isPro = snapshot.getBoolean("isPro") ?: false
-                SubscriptionManager.syncWithFirestore(credits.toInt(), isPro)
-                UserProfile(
-                    userId = userId,
-                    email = snapshot.getString("email") ?: email,
-                    displayName = snapshot.getString("displayName") ?: displayName,
-                    credits = credits,
-                    isPro = isPro,
-                    createdAt = snapshot.getString("createdAt") ?: nowString,
-                    updatedAt = snapshot.getString("updatedAt") ?: nowString
+                val claimRecord = hashMapOf<String, Any>(
+                    "deviceId" to userId,
+                    "claimedAt" to (claimSnapshot?.getString("claimedAt") ?: nowString),
+                    "initialCreditsGranted" to 25L,
+                    "currentCredits" to starterCredits,
+                    "lastSyncedAt" to nowString
                 )
+                try { claimedDoc.set(claimRecord, SetOptions.merge()).await() } catch (_: Exception) {}
+
+                SubscriptionManager.syncWithFirestore(starterCredits.toInt(), false, false)
+                initialProfile
             }
         } catch (e: Exception) {
             Log.w("UserFirestoreRepo", "Notice initializing user profile: ${e.message}")
-            SubscriptionManager.syncWithFirestore(SubscriptionManager.credits.value, SubscriptionManager.isPro.value)
+            SubscriptionManager.syncWithFirestore(
+                SubscriptionManager.credits.value,
+                SubscriptionManager.isPro.value
+            )
             UserProfile(
                 userId = userId,
                 email = email,
@@ -181,18 +218,28 @@ class UserFirestoreRepository(private val db: FirebaseFirestore) {
                 return@addSnapshotListener
             }
             if (snapshot != null && snapshot.exists()) {
-                val credits = snapshot.getLong("credits") ?: 25L
+                val credits = snapshot.getLong("credits") ?: 0L
                 val isPro = snapshot.getBoolean("isPro") ?: false
+                val isYearly = snapshot.getBoolean("isYearly") ?: false
+                val lastDailyClaim = snapshot.getString("lastDailyClaimDate")
+                val lastReset = snapshot.getString("lastResetMonth")
                 val profile = UserProfile(
                     userId = userId,
                     email = snapshot.getString("email") ?: "",
                     displayName = snapshot.getString("displayName") ?: "Holiday Friend",
                     credits = credits,
                     isPro = isPro,
+                    isYearly = isYearly,
                     createdAt = snapshot.getString("createdAt") ?: "",
                     updatedAt = snapshot.getString("updatedAt") ?: ""
                 )
-                SubscriptionManager.syncWithFirestore(credits.toInt(), isPro)
+                SubscriptionManager.syncWithFirestore(
+                    firestoreCredits = credits.toInt(),
+                    firestoreIsPro = isPro,
+                    isYearly = isYearly,
+                    lastDailyClaimDate = lastDailyClaim,
+                    lastResetMonth = lastReset
+                )
                 trySend(profile)
             } else {
                 trySend(null)
@@ -202,30 +249,33 @@ class UserFirestoreRepository(private val db: FirebaseFirestore) {
     }
 
     /**
-     * Atomically deducts credits from Firestore for text generation or card creation.
+     * Atomically deducts credits from Firestore with dual-layer ledger sync.
      */
     suspend fun deductCredits(userId: String, amount: Int): Boolean {
         require(userId.isNotBlank()) { "User ID must not be blank" }
         val docRef = db.collection("users").document(userId)
+        val claimedRef = db.collection("claimed_devices").document(userId)
         return try {
-            db.runTransaction { transaction ->
+            val success = db.runTransaction { transaction ->
                 val snapshot = transaction.get(docRef)
-                val currentCredits = snapshot.getLong("credits") ?: 0L
                 val isPro = snapshot.getBoolean("isPro") ?: false
-                if (isPro) {
-                    // Pro members have unlimited credits
+                val isYearly = snapshot.getBoolean("isYearly") ?: false
+                if (isPro && isYearly) {
                     return@runTransaction true
                 }
+                val currentCredits = snapshot.getLong("credits") ?: 0L
                 if (currentCredits >= amount) {
                     val newCredits = currentCredits - amount
-                    transaction.update(docRef, "credits", newCredits)
                     val now = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).format(Date())
+                    transaction.update(docRef, "credits", newCredits)
                     transaction.update(docRef, "updatedAt", now)
+                    transaction.set(claimedRef, mapOf("currentCredits" to newCredits, "lastUpdated" to now), SetOptions.merge())
                     true
                 } else {
                     false
                 }
             }.await()
+            success
         } catch (e: Exception) {
             Log.e("UserFirestoreRepo", "Failed to deduct credits", e)
             false
@@ -233,15 +283,27 @@ class UserFirestoreRepository(private val db: FirebaseFirestore) {
     }
 
     /**
-     * Adds credits in Firestore (e.g., from rewarded ad or subscription).
+     * Adds credits in Firestore (e.g., from rewarded ad or subscription) and updates backup ledger.
      */
     suspend fun addCredits(userId: String, amount: Int) {
         require(userId.isNotBlank()) { "User ID must not be blank" }
         val docRef = db.collection("users").document(userId)
+        val claimedRef = db.collection("claimed_devices").document(userId)
+        val now = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).format(Date())
         try {
-            docRef.update(
-                "credits", FieldValue.increment(amount.toLong()),
-                "updatedAt", SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).format(Date())
+            docRef.set(
+                mapOf(
+                    "credits" to FieldValue.increment(amount.toLong()),
+                    "updatedAt" to now
+                ),
+                SetOptions.merge()
+            ).await()
+            claimedRef.set(
+                mapOf(
+                    "currentCredits" to FieldValue.increment(amount.toLong()),
+                    "lastUpdated" to now
+                ),
+                SetOptions.merge()
             ).await()
         } catch (e: Exception) {
             Log.e("UserFirestoreRepo", "Failed to add credits", e)
@@ -249,16 +311,29 @@ class UserFirestoreRepository(private val db: FirebaseFirestore) {
     }
 
     /**
-     * Updates Pro subscription status in Firestore.
+     * Updates Pro subscription status in Firestore and backup ledger.
      */
     suspend fun setProStatus(userId: String, isPro: Boolean, creditsBonus: Int = 300) {
         require(userId.isNotBlank()) { "User ID must not be blank" }
         val docRef = db.collection("users").document(userId)
+        val claimedRef = db.collection("claimed_devices").document(userId)
+        val now = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).format(Date())
         try {
-            docRef.update(
-                "isPro", isPro,
-                "credits", FieldValue.increment(creditsBonus.toLong()),
-                "updatedAt", SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).format(Date())
+            docRef.set(
+                mapOf(
+                    "isPro" to isPro,
+                    "credits" to FieldValue.increment(creditsBonus.toLong()),
+                    "updatedAt" to now
+                ),
+                SetOptions.merge()
+            ).await()
+            claimedRef.set(
+                mapOf(
+                    "isPro" to isPro,
+                    "currentCredits" to FieldValue.increment(creditsBonus.toLong()),
+                    "lastUpdated" to now
+                ),
+                SetOptions.merge()
             ).await()
         } catch (e: Exception) {
             Log.e("UserFirestoreRepo", "Failed to update pro status", e)

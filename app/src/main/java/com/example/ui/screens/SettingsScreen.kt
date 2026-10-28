@@ -76,6 +76,12 @@ fun SettingsScreen(
     modifier: Modifier = Modifier
 ) {
     val isPro by SubscriptionManager.isPro.collectAsState()
+    val credits by SubscriptionManager.credits.collectAsState()
+    val isCloudSynced by SubscriptionManager.isCloudSynced.collectAsState()
+    val isSyncing by SubscriptionManager.isSyncing.collectAsState()
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val deviceId = remember { com.example.data.firebase.UserFirestoreRepository.getOrCreateUserId(context) }
+    var restoreDialogMessage by remember { mutableStateOf<String?>(null) }
     val activeDialog by viewModel.activeDialog.collectAsStateWithLifecycle()
     val notificationsEnabled by viewModel.notificationsEnabled.collectAsStateWithLifecycle()
     val countdownEnabled by viewModel.countdownEnabled.collectAsStateWithLifecycle()
@@ -277,6 +283,120 @@ fun SettingsScreen(
         Spacer(modifier = Modifier.height(20.dp))
 
         Text(
+            text = "Data & Credit Cloud Protection",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onBackground,
+            modifier = Modifier.padding(bottom = 12.dp)
+        )
+
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("settings_credit_protection_card"),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .background(
+                                if (isCloudSynced) Color(0xFF2E7D32).copy(alpha = 0.15f)
+                                else HolidayCrimson.copy(alpha = 0.15f)
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(text = if (isCloudSynced) "🛡️" else "🔄", fontSize = 20.sp)
+                    }
+
+                    Spacer(modifier = Modifier.width(12.dp))
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "Hardware Cloud Protection",
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = if (isCloudSynced) Color(0xFF2E7D32).copy(alpha = 0.15f) else Color(0xFFE65100).copy(alpha = 0.15f)
+                            ) {
+                                Text(
+                                    text = if (isCloudSynced) "PROTECTED ✓" else "SYNCING...",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        color = if (isCloudSynced) Color(0xFF2E7D32) else Color(0xFFE65100),
+                                        fontWeight = FontWeight.ExtraBold
+                                    ),
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                        Text(
+                            text = "Credits: $credits AI Credits available",
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Bold
+                            )
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Text(
+                    text = "Your credit balance and Pro entitlements are tied to your device hardware identity. Even if you clear phone storage or reinstall the app, your credits are automatically preserved and restored from Cloud Firestore without needing passwords.",
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        lineHeight = 18.sp
+                    )
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Device: ${deviceId.take(14)}...",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                            fontWeight = FontWeight.Medium
+                        )
+                    )
+
+                    OutlinedButton(
+                        onClick = {
+                            SubscriptionManager.manualRestoreCredits(context) { success, balance, msg ->
+                                restoreDialogMessage = msg
+                            }
+                        },
+                        enabled = !isSyncing,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.testTag("settings_sync_credits_button")
+                    ) {
+                        if (isSyncing) {
+                            Text(text = "Syncing...", fontSize = 12.sp)
+                        } else {
+                            Text(text = "Verify & Restore", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        Text(
             text = "About & Legal",
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
@@ -346,6 +466,19 @@ fun SettingsScreen(
     }
 
     // Dialogs
+    if (restoreDialogMessage != null) {
+        AlertDialog(
+            onDismissRequest = { restoreDialogMessage = null },
+            title = { Text("Credit Protection Status", fontWeight = FontWeight.Bold) },
+            text = { Text(restoreDialogMessage.orEmpty()) },
+            confirmButton = {
+                TextButton(onClick = { restoreDialogMessage = null }) {
+                    Text("OK", color = HolidayCrimson, fontWeight = FontWeight.Bold)
+                }
+            }
+        )
+    }
+
     if (showReportProblemDialog) {
         ReportProblemDialog(onDismiss = { showReportProblemDialog = false })
     }

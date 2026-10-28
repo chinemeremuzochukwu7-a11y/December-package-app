@@ -25,6 +25,11 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Refresh
+import android.widget.Toast
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.Wifi
+import androidx.compose.material.icons.filled.WifiOff
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -42,6 +47,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import com.example.utils.NetworkUtils
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -83,6 +89,8 @@ fun ProSubscriptionScreen(
     val activeTier by SubscriptionManager.activeTier.collectAsState()
     val isLoading by SubscriptionManager.isLoading.collectAsState()
 
+    var showNoNetworkDialog by remember { mutableStateOf(false) }
+
     // Selected Pro Tier: default to Yearly for best value
     var selectedReferenceTierId by remember { mutableStateOf(PricingTiers.PRO_YEARLY.id) }
 
@@ -114,6 +122,13 @@ fun ProSubscriptionScreen(
                 actions = {
                     TextButton(
                         onClick = {
+                            if (!NetworkUtils.isNetworkAvailable(context)) {
+                                showNoNetworkDialog = true
+                                scope.launch {
+                                    snackbarHostState.showSnackbar("⚠️ No internet connection. Please connect to Wi-Fi or mobile data.")
+                                }
+                                return@TextButton
+                            }
                             SubscriptionManager.restorePurchases { active ->
                                 scope.launch {
                                     snackbarHostState.showSnackbar(
@@ -197,6 +212,54 @@ fun ProSubscriptionScreen(
                 }
             }
 
+            // Payment Network Connectivity Status Banner
+            item {
+                val isConnected = NetworkUtils.isNetworkAvailable(context)
+                val connectionType = NetworkUtils.getNetworkTypeName(context)
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = if (isConnected) HolidayPineGreen.copy(alpha = 0.1f) else HolidayCrimson.copy(alpha = 0.1f),
+                    border = BorderStroke(
+                        1.dp,
+                        if (isConnected) HolidayPineGreen.copy(alpha = 0.4f) else HolidayCrimson.copy(alpha = 0.5f)
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("payment_network_status_banner")
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = if (isConnected) Icons.Default.Wifi else Icons.Default.WifiOff,
+                            contentDescription = null,
+                            tint = if (isConnected) HolidayPineGreen else HolidayCrimson,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = if (isConnected) "Network Ready ($connectionType)" else "No Internet Connection Detected",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isConnected) HolidayPineGreen else HolidayCrimson
+                            )
+                            Text(
+                                text = if (isConnected)
+                                    "Connected to $connectionType. Ready to process secure Google Play billing."
+                                else
+                                    "Connect to Wi-Fi or mobile data before upgrading via Google Play.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+
             // Price Section: Monthly ($9.99) & Yearly ($79.00 - Save 34%)
             item {
                 Column(
@@ -244,6 +307,14 @@ fun ProSubscriptionScreen(
                     // Primary Action Button
                     Button(
                         onClick = {
+                            val isConnected = NetworkUtils.isNetworkAvailable(context)
+                            if (!isConnected) {
+                                showNoNetworkDialog = true
+                                scope.launch {
+                                    snackbarHostState.showSnackbar("⚠️ No internet connection. Please connect to Wi-Fi or mobile data.")
+                                }
+                                return@Button
+                            }
                             if (activity != null) {
                                 SubscriptionManager.purchaseByProductId(
                                     activity = activity,
@@ -306,6 +377,14 @@ fun ProSubscriptionScreen(
                     ) {
                         TextButton(
                             onClick = {
+                                val isConnected = NetworkUtils.isNetworkAvailable(context)
+                                if (!isConnected) {
+                                    showNoNetworkDialog = true
+                                    scope.launch {
+                                        snackbarHostState.showSnackbar("⚠️ No internet connection. Connect to Wi-Fi or mobile data to restore purchases.")
+                                    }
+                                    return@TextButton
+                                }
                                 SubscriptionManager.restorePurchases { active ->
                                     scope.launch {
                                         snackbarHostState.showSnackbar(
@@ -363,6 +442,60 @@ fun ProSubscriptionScreen(
                 }
             }
         }
+    }
+
+    if (showNoNetworkDialog) {
+        AlertDialog(
+            onDismissRequest = { showNoNetworkDialog = false },
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.WifiOff,
+                    contentDescription = "No Network",
+                    tint = HolidayCrimson,
+                    modifier = Modifier.size(36.dp)
+                )
+            },
+            title = {
+                Text(
+                    text = "Internet Connection Required",
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "An active Wi-Fi or mobile cellular data connection is required before Google Play Billing can be launched.",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Text(
+                        text = "Please connect to Wi-Fi or enable cellular mobile data on your device, then try again.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (NetworkUtils.isNetworkAvailable(context)) {
+                            showNoNetworkDialog = false
+                            Toast.makeText(context, "Network connected! Ready to upgrade.", Toast.LENGTH_SHORT).show()
+                        } else {
+                            Toast.makeText(context, "Still offline. Please check your Wi-Fi or mobile data.", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = HolidayCrimson)
+                ) {
+                    Text("Check Connection")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showNoNetworkDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }
 
