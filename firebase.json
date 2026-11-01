@@ -1,8 +1,21 @@
 {
   "firestore": [
     {
-      "database": "ai-studio-android-holidayw-036eb634-2771-4127-873e-ec1d4a2d7286",
+      "database": "ai-studio-android-december-beff9704-9582-497f-a31f-7b12317cf6eb",
       "rules": "firestore.rules"
     }
-  ]
+  ],
+  "emulators": {
+    "firestore": {
+      "host": "127.0.0.1",
+      "port": 8085
+    },
+    "auth": {
+      "host": "127.0.0.1",
+      "port": 9099
+    },
+    "ui": {
+      "enabled": false
+    }
+  }
 }

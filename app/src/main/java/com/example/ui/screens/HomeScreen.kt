@@ -107,6 +107,19 @@ fun HomeScreen(
     val regeneratedWishTexts by viewModel.regeneratedWishTexts.collectAsStateWithLifecycle()
     val snowEffectsEnabled by viewModel.snowEffectsEnabled.collectAsStateWithLifecycle()
     val context = androidx.compose.ui.platform.LocalContext.current
+    val currentUser by com.example.data.firebase.AuthManager.currentUser.collectAsStateWithLifecycle()
+    var showGoogleSignInDialog by remember { mutableStateOf(false) }
+    var pendingAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+
+    fun runWithAuth(action: () -> Unit) {
+        if (currentUser == null) {
+            pendingAction = action
+            showGoogleSignInDialog = true
+        } else {
+            action()
+        }
+    }
+
     val featuredCardTemplates = CardTemplatesRepository.getAllTemplates().take(4)
     val christmasWishes = remember(regeneratedWishTexts) {
         WishesRepository.getChristmasWishes().take(4).map { w ->
@@ -234,7 +247,7 @@ fun HomeScreen(
                 HeroHeaderSection(
                     snowEffectsEnabled = snowEffectsEnabled,
                     onToggleSnowEffects = { viewModel.toggleSnowEffects() },
-                    onCreateWishClick = onNavigateToAiWishGenerator,
+                    onCreateWishClick = { runWithAuth { onNavigateToAiWishGenerator() } },
                     onCreateCardClick = onNavigateToCards
                 )
             }
@@ -308,7 +321,7 @@ fun HomeScreen(
             item {
                 ThreeMainActionsRow(
                     onWishesClick = { onNavigateToWishesCategory(WishCategory.ALL) },
-                    onAiGeneratorClick = onNavigateToAiWishGenerator,
+                    onAiGeneratorClick = { runWithAuth { onNavigateToAiWishGenerator() } },
                     onCardsClick = onNavigateToCards
                 )
             }
@@ -323,7 +336,7 @@ fun HomeScreen(
             // Section: Prominent "Create a Wish with AI" Banner
             item {
                 AiWishPromoCard(
-                    onGenerateClick = onNavigateToAiWishGenerator,
+                    onGenerateClick = { runWithAuth { onNavigateToAiWishGenerator() } },
                     onCardsClick = onNavigateToCards
                 )
             }
@@ -357,8 +370,10 @@ fun HomeScreen(
                     HomeCardSpotlightItem(
                         template = template,
                         onCustomizeClick = {
-                            viewModel.prepareCardForCustomization(template)
-                            onNavigateToCustomizeCard(template)
+                            runWithAuth {
+                                viewModel.prepareCardForCustomization(template)
+                                onNavigateToCustomizeCard(template)
+                            }
                         }
                     )
                 }
@@ -386,7 +401,11 @@ fun HomeScreen(
                         wish = wish,
                         isFavorite = favoriteIds.contains(wish.id),
                         onToggleFavorite = { viewModel.toggleFavorite(wish) },
-                        onRegenerate = { viewModel.regenerateWishWithAi(wish) }
+                        onRegenerate = {
+                            runWithAuth {
+                                viewModel.regenerateWishWithAi(wish)
+                            }
+                        }
                     )
                 }
             }
@@ -413,7 +432,11 @@ fun HomeScreen(
                         wish = wish,
                         isFavorite = favoriteIds.contains(wish.id),
                         onToggleFavorite = { viewModel.toggleFavorite(wish) },
-                        onRegenerate = { viewModel.regenerateWishWithAi(wish) }
+                        onRegenerate = {
+                            runWithAuth {
+                                viewModel.regenerateWishWithAi(wish)
+                            }
+                        }
                     )
                 }
             }
@@ -435,7 +458,11 @@ fun HomeScreen(
                     wish = wish,
                     isFavorite = favoriteIds.contains(wish.id),
                     onToggleFavorite = { viewModel.toggleFavorite(wish) },
-                    onRegenerate = { viewModel.regenerateWishWithAi(wish) }
+                    onRegenerate = {
+                        runWithAuth {
+                            viewModel.regenerateWishWithAi(wish)
+                        }
+                    }
                 )
             }
         }
@@ -446,6 +473,22 @@ fun HomeScreen(
         snowflakeCount = 20,
         enabled = snowEffectsEnabled
     )
+
+    if (showGoogleSignInDialog) {
+        com.example.ui.components.GoogleSignInRedDialog(
+            actionTitle = "Sign In to Create & Personalize",
+            actionDescription = "Sign in with Google before creating custom cards or generating AI wishes. This secures your 25 free credits and cloud backup!",
+            onDismiss = {
+                showGoogleSignInDialog = false
+                pendingAction = null
+            },
+            onSuccess = {
+                showGoogleSignInDialog = false
+                pendingAction?.invoke()
+                pendingAction = null
+            }
+        )
+    }
     }
 }
 

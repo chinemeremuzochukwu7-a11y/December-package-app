@@ -13,7 +13,11 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -52,12 +56,21 @@ fun HolidayWishesApp(
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
 
+    val currentUser by com.example.data.firebase.AuthManager.currentUser.collectAsStateWithLifecycle()
+    var showAccountSignInDialog by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+
+    // Silent account auto-detection on app start/resume (detects if account was previously authorized on device)
+    LaunchedEffect(Unit) {
+        com.example.data.firebase.AuthManager.attemptAutoSignIn(context)
+    }
+
     // Synchronize user profile & initial 25 credits with Firestore on app open
-    LaunchedEffect(currentUserId) {
-        if (currentUserId.isNotBlank()) {
+    val activeUserId = currentUser?.uid ?: currentUserId
+    LaunchedEffect(activeUserId) {
+        if (activeUserId.isNotBlank()) {
             val repo = UserFirestoreRepository(context)
-            repo.ensureUserInitialized(currentUserId)
-            repo.observeUserProfile(currentUserId).collect { /* updates SubscriptionManager */ }
+            repo.ensureUserInitialized(activeUserId)
+            repo.observeUserProfile(activeUserId).collect { /* updates SubscriptionManager */ }
         }
     }
     val navController = rememberNavController()
@@ -152,6 +165,9 @@ fun HolidayWishesApp(
                             navController.navigate(Screen.ProSubscription.route) {
                                 launchSingleTop = true
                             }
+                        },
+                        onAccountClick = {
+                            showAccountSignInDialog = true
                         }
                     )
                 }
@@ -191,6 +207,11 @@ fun HolidayWishesApp(
                 modifier = Modifier.padding(innerPadding)
             )
             MagicRatingDialog()
+            if (showAccountSignInDialog) {
+                com.example.ui.components.GoogleSignInRedDialog(
+                    onDismiss = { showAccountSignInDialog = false }
+                )
+            }
         }
     }
 }

@@ -98,6 +98,10 @@ fun CardsScreen(
     val unlockedCardIds by viewModel.unlockedCardIds.collectAsStateWithLifecycle()
     val customTemplateMessages by viewModel.customCardTemplateMessages.collectAsStateWithLifecycle()
 
+    val currentUser by com.example.data.firebase.AuthManager.currentUser.collectAsStateWithLifecycle()
+    var showGoogleSignInGate by remember { mutableStateOf(false) }
+    var pendingAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+
     var selectedFilter by remember { mutableStateOf(CardFilterType.ALL) }
     var showProUpgradeDialog by remember { mutableStateOf(false) }
     var showAiCardCreationDialog by remember { mutableStateOf(false) }
@@ -209,7 +213,14 @@ fun CardsScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 4.dp)
-                .clickable { showAiCardCreationDialog = true }
+                .clickable {
+                    if (currentUser == null) {
+                        pendingAction = { showAiCardCreationDialog = true }
+                        showGoogleSignInGate = true
+                    } else {
+                        showAiCardCreationDialog = true
+                    }
+                }
                 .testTag("ai_create_card_banner"),
             shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(
@@ -363,8 +374,16 @@ fun CardsScreen(
                     customMessage = customMsg,
                     isUnlocked = isUnlocked,
                     onCustomizeClick = {
-                        viewModel.prepareCardForCustomization(template)
-                        onNavigateToCustomize(template)
+                        if (currentUser == null) {
+                            pendingAction = {
+                                viewModel.prepareCardForCustomization(template)
+                                onNavigateToCustomize(template)
+                            }
+                            showGoogleSignInGate = true
+                        } else {
+                            viewModel.prepareCardForCustomization(template)
+                            onNavigateToCustomize(template)
+                        }
                     },
                     onQuickShareClick = {
                         if (template.isPro && !isUnlocked) {
@@ -514,6 +533,22 @@ fun CardsScreen(
                 TextButton(onClick = { showAiCreationCreditDialog = false }) {
                     Text("Cancel")
                 }
+            }
+        )
+    }
+
+    if (showGoogleSignInGate) {
+        com.example.ui.components.GoogleSignInRedDialog(
+            actionTitle = "Sign In to Create & Customize",
+            actionDescription = "Sign in with Google before customizing cards or creating with AI to protect your 25 credits and save your creations to the cloud!",
+            onDismiss = {
+                showGoogleSignInGate = false
+                pendingAction = null
+            },
+            onSuccess = {
+                showGoogleSignInGate = false
+                pendingAction?.invoke()
+                pendingAction = null
             }
         )
     }

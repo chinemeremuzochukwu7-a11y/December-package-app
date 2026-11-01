@@ -54,6 +54,7 @@ class FirestoreTrackersRepository(private val db: FirebaseFirestore) {
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
                     Log.w("FirestoreTrackers", "Error listening to birthdays", error)
+                    close(error)
                     return@addSnapshotListener
                 }
                 if (snapshot != null) {
@@ -107,6 +108,7 @@ class FirestoreTrackersRepository(private val db: FirebaseFirestore) {
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
                     Log.w("FirestoreTrackers", "Error listening to expenses", error)
+                    close(error)
                     return@addSnapshotListener
                 }
                 if (snapshot != null) {
@@ -160,6 +162,7 @@ class FirestoreTrackersRepository(private val db: FirebaseFirestore) {
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
                     Log.w("FirestoreTrackers", "Error listening to meals", error)
+                    close(error)
                     return@addSnapshotListener
                 }
                 if (snapshot != null) {

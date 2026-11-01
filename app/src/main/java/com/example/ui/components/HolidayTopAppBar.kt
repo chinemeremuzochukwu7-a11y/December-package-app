@@ -47,10 +47,12 @@ fun HolidayTopAppBar(
     subtitle: String? = null,
     onMenuClick: () -> Unit = {},
     onProClick: () -> Unit = {},
+    onAccountClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val isPro by SubscriptionManager.isPro.collectAsState()
     val credits by SubscriptionManager.credits.collectAsState()
+    val currentUser by com.example.data.firebase.AuthManager.currentUser.collectAsState()
 
     CenterAlignedTopAppBar(
         navigationIcon = {
@@ -138,6 +140,38 @@ fun HolidayTopAppBar(
                             fontWeight = FontWeight.ExtraBold,
                             color = if (isPro) Color.Black else HolidayCrimson
                         )
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(5.dp))
+
+                // Google Account Icon/Badge
+                Surface(
+                    shape = CircleShape,
+                    color = if (currentUser != null) HolidayCrimson.copy(alpha = 0.15f) else Color(0xFFE0E0E0),
+                    border = androidx.compose.foundation.BorderStroke(1.2.dp, if (currentUser != null) HolidayCrimson else Color(0xFFBDBDBD)),
+                    modifier = Modifier
+                        .size(28.dp)
+                        .clickable(onClick = onAccountClick)
+                        .testTag("app_bar_account_button")
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        if (currentUser != null) {
+                            val initial = (currentUser?.displayName?.take(1) ?: currentUser?.email?.take(1) ?: "G").uppercase()
+                            Text(
+                                text = initial,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = HolidayCrimson
+                            )
+                        } else {
+                            Text(
+                                text = "G",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF555555)
+                            )
+                        }
                     }
                 }
             }

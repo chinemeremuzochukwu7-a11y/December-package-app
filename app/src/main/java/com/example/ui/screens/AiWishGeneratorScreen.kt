@@ -131,40 +131,57 @@ fun AiWishGeneratorScreen(
     var selectedTabIndex by remember { mutableIntStateOf(0) }
     var showCreditDialog by remember { mutableStateOf(false) }
 
+    val currentUser by com.example.data.firebase.AuthManager.currentUser.collectAsStateWithLifecycle()
+    var showGoogleSignInGate by remember { mutableStateOf(false) }
+    var pendingAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+
     val context = LocalContext.current
     val activity = context as? Activity
 
-    val onPerformGenerateWish = {
-        val calculatedCost = wishLength.creditCost
-        if (isPro) {
-            viewModel.generateAiWish()
+    val onPerformGenerateWish: () -> Unit = {
+        if (currentUser == null) {
+            pendingAction = {
+                val cost = wishLength.creditCost
+                if (isPro) {
+                    viewModel.generateAiWish()
+                } else if (credits >= cost) {
+                    if (SubscriptionManager.useCredits(cost)) viewModel.generateAiWish()
+                }
+            }
+            showGoogleSignInGate = true
         } else {
-            if (credits < calculatedCost) {
-                showCreditDialog = true
+            val calculatedCost = wishLength.creditCost
+            if (isPro) {
+                viewModel.generateAiWish()
             } else {
-                // Free user before start creating must watch rewarded ads
-                if (activity != null) {
-                    AdManager.showRewardedAd(
-                        activity = activity,
-                        onRewardEarned = { /* +1 credit earned */ },
-                        onDismiss = {
-                            if (SubscriptionManager.useCredits(calculatedCost)) {
-                                viewModel.generateAiWish()
-                            } else {
-                                showCreditDialog = true
-                            }
-                        }
-                    )
+                if (credits < calculatedCost) {
+                    showCreditDialog = true
                 } else {
-                    if (SubscriptionManager.useCredits(calculatedCost)) {
-                        viewModel.generateAiWish()
+                    // Free user before start creating must watch rewarded ads
+                    if (activity != null) {
+                        AdManager.showRewardedAd(
+                            activity = activity,
+                            onRewardEarned = { /* +1 credit earned */ },
+                            onDismiss = {
+                                if (SubscriptionManager.useCredits(calculatedCost)) {
+                                    viewModel.generateAiWish()
+                                } else {
+                                    showCreditDialog = true
+                                }
+                            }
+                        )
                     } else {
-                        showCreditDialog = true
+                        if (SubscriptionManager.useCredits(calculatedCost)) {
+                            viewModel.generateAiWish()
+                        } else {
+                            showCreditDialog = true
+                        }
                     }
                 }
             }
         }
     }
+
 
     if (showCreditDialog) {
         val calculatedCost = wishLength.creditCost
@@ -400,6 +417,22 @@ fun AiWishGeneratorScreen(
                 onSaveWish = { text, occ -> viewModel.saveAiWishToFavorites(text, occ) }
             )
         }
+    }
+
+    if (showGoogleSignInGate) {
+        com.example.ui.components.GoogleSignInRedDialog(
+            actionTitle = "Sign In for AI Wish Generator",
+            actionDescription = "Sign in with Google before generating AI wishes to securely save your creations and protect your 25 credits!",
+            onDismiss = {
+                showGoogleSignInGate = false
+                pendingAction = null
+            },
+            onSuccess = {
+                showGoogleSignInGate = false
+                pendingAction?.invoke()
+                pendingAction = null
+            }
+        )
     }
 }
 

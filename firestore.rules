@@ -2,33 +2,113 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Anti-Abuse Hardware Ledger: prevents re-claiming starter credits
-    match /claimed_devices/{deviceId} {
-      allow read, write: if true;
+    // Default deny all access
+    match /{document=**} {
+      allow read, write: if false;
     }
 
-    // User Profile & Data by permanent device/user ID
-    match /users/{userId} {
-      allow read, write: if true;
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
 
-      // User's Saved Cards
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidClaimedDevice(data) {
+      return data.deviceId is string && data.deviceId.size() > 0 && data.deviceId.size() <= 128 &&
+             (!('currentCredits' in data) || data.currentCredits is number) &&
+             (!('initialCreditsGranted' in data) || data.initialCreditsGranted is number) &&
+             (!('isPro' in data) || data.isPro is bool);
+    }
+
+    function isValidUser(data) {
+      return data.userId is string && data.userId.size() > 0 && data.userId.size() <= 128 &&
+             data.credits is number &&
+             data.isPro is bool &&
+             (!('email' in data) || (data.email is string && data.email.size() <= 200)) &&
+             (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 200)) &&
+             (!('isYearly' in data) || data.isYearly is bool) &&
+             (!('starterCreditClaimed' in data) || data.starterCreditClaimed is bool);
+    }
+
+    function isValidSavedCard(data) {
+      return data.id is string && data.id.size() > 0 && data.id.size() <= 128 &&
+             data.userId is string && data.userId.size() > 0 &&
+             data.templateId is string && data.templateId.size() <= 128 &&
+             data.title is string && data.title.size() <= 200 &&
+             data.message is string && data.message.size() <= 4000;
+    }
+
+    function isValidBirthday(data) {
+      return data.id is string && data.id.size() > 0 && data.id.size() <= 128 &&
+             data.userId is string && data.userId.size() > 0 &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 200 &&
+             data.birthDate is string && data.birthDate.size() <= 50;
+    }
+
+    function isValidExpense(data) {
+      return data.id is string && data.id.size() > 0 && data.id.size() <= 128 &&
+             data.userId is string && data.userId.size() > 0 &&
+             data.title is string && data.title.size() > 0 && data.title.size() <= 200 &&
+             data.amount is number;
+    }
+
+    function isValidMeal(data) {
+      return data.id is string && data.id.size() > 0 && data.id.size() <= 128 &&
+             data.userId is string && data.userId.size() > 0 &&
+             data.mealType is string && data.mealType.size() <= 50 &&
+             data.title is string && data.title.size() > 0 && data.title.size() <= 200;
+    }
+
+    // Permanent hardware ledger
+    match /claimed_devices/{deviceId} {
+      allow get: if isValidId(deviceId);
+      allow create, update: if isValidId(deviceId) && isValidClaimedDevice(incoming());
+      allow delete: if false;
+    }
+
+    // Authenticated User Profiles & Scoped Collections
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create, update: if isOwner(userId) && isValidUser(incoming());
+      allow delete: if isOwner(userId);
+
+      // User's Saved Holiday Cards
       match /saved_cards/{cardId} {
-        allow read, write: if true;
+        allow get, list, delete: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidSavedCard(incoming());
       }
 
       // User's Birthdays
       match /birthdays/{birthdayId} {
-        allow read, write: if true;
+        allow get, list, delete: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidBirthday(incoming());
       }
 
       // User's Expenses
       match /expenses/{expenseId} {
-        allow read, write: if true;
+        allow get, list, delete: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidExpense(incoming());
       }
 
       // User's Meal Plans
       match /meals/{mealId} {
-        allow read, write: if true;
+        allow get, list, delete: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidMeal(incoming());
       }
     }
   }

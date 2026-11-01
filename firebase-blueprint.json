@@ -1,15 +1,34 @@
 {
   "entities": {
+    "ClaimedDevice": {
+      "title": "ClaimedDevice",
+      "description": "Hardware device fingerprint ledger preventing duplicate starter credit claims",
+      "type": "object",
+      "properties": {
+        "deviceId": { "type": "string", "description": "Device fingerprint identifier" },
+        "claimedAt": { "type": "string", "description": "Timestamp when device first claimed credits" },
+        "initialCreditsGranted": { "type": "number", "description": "Initial credits granted (25)" },
+        "currentCredits": { "type": "number", "description": "Latest credit balance backup" },
+        "lastSyncedAt": { "type": "string", "description": "Last synchronization timestamp" },
+        "lastUpdated": { "type": "string", "description": "Last update timestamp" },
+        "isPro": { "type": "boolean", "description": "Pro subscription status" }
+      },
+      "required": ["deviceId"]
+    },
     "User": {
       "title": "User",
-      "description": "User profile with persistent credits and subscription status",
+      "description": "User profile with persistent credits, subscriptions, and settings",
       "type": "object",
       "properties": {
         "userId": { "type": "string", "description": "The Firebase Auth UID" },
         "email": { "type": "string", "description": "User email address" },
         "displayName": { "type": "string", "description": "Display name of the user" },
-        "credits": { "type": "number", "description": "Available credits / tokens balance, starts at 25 for new users" },
+        "credits": { "type": "number", "description": "Available credits / tokens balance" },
         "isPro": { "type": "boolean", "description": "Whether the user has active Pro access" },
+        "isYearly": { "type": "boolean", "description": "Whether Pro is yearly" },
+        "starterCreditClaimed": { "type": "boolean", "description": "Flag for starter credit claim" },
+        "lastDailyClaimDate": { "type": "string", "description": "Date of last daily reward claim" },
+        "lastResetMonth": { "type": "string", "description": "Month of last monthly allowance reset" },
         "createdAt": { "type": "string", "description": "Account registration timestamp" },
         "updatedAt": { "type": "string", "description": "Last update timestamp" }
       },
@@ -27,6 +46,14 @@
         "recipientName": { "type": "string", "description": "Card recipient name" },
         "message": { "type": "string", "description": "Personalized greeting message" },
         "senderName": { "type": "string", "description": "Sender name" },
+        "primaryColorHex": { "type": "number", "description": "Primary theme color hex" },
+        "secondaryColorHex": { "type": "number", "description": "Secondary color hex" },
+        "accentColorHex": { "type": "number", "description": "Accent gold color hex" },
+        "decorationStyle": { "type": "string", "description": "Decoration theme style" },
+        "textSizeSp": { "type": "number", "description": "Font size in sp" },
+        "textAlign": { "type": "string", "description": "Text alignment" },
+        "showRecipient": { "type": "boolean", "description": "Visibility flag for recipient" },
+        "showSender": { "type": "boolean", "description": "Visibility flag for sender" },
         "createdAt": { "type": "string", "description": "Creation timestamp" }
       },
       "required": ["id", "userId", "templateId", "title", "message"]
@@ -54,7 +81,7 @@
         "id": { "type": "string", "description": "Unique identifier" },
         "userId": { "type": "string", "description": "Owner user UID" },
         "title": { "type": "string", "description": "Expense title or item" },
-        "amount": { "type": "number", "description": "Expense amount in USD" },
+        "amount": { "type": "number", "description": "Expense amount" },
         "category": { "type": "string", "description": "Category: Gifts, Food, Travel, etc" },
         "date": { "type": "string", "description": "Date of expense" },
         "createdAt": { "type": "string", "description": "Creation timestamp" }
@@ -78,6 +105,10 @@
     }
   },
   "firestore": {
+    "/claimed_devices/{deviceId}": {
+      "schema": "ClaimedDevice",
+      "description": "Permanent hardware device registry preventing starter credit duplicate claiming"
+    },
     "/users/{userId}": {
       "schema": "User",
       "description": "User profile with persistent credits and subscription status"

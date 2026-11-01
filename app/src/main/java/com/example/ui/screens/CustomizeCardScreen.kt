@@ -159,6 +159,10 @@ fun CustomizeCardScreen(
         }
     }
 
+    val currentUser by com.example.data.firebase.AuthManager.currentUser.collectAsStateWithLifecycle()
+    var showGoogleSignInGate by remember { mutableStateOf(false) }
+    var pendingAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+
     val credits by SubscriptionManager.credits.collectAsStateWithLifecycle()
     val isPro by SubscriptionManager.isPro.collectAsStateWithLifecycle()
     var showCreditDialog by remember { mutableStateOf(false) }
@@ -171,7 +175,10 @@ fun CustomizeCardScreen(
     val activity = context as? Activity
 
     val executeCardActionWithCredits = { onProceed: () -> Unit ->
-        if (isPro) {
+        if (currentUser == null) {
+            pendingAction = onProceed
+            showGoogleSignInGate = true
+        } else if (isPro) {
             onProceed()
         } else {
             if (credits < SubscriptionManager.CARD_CREATION_CREDIT_COST) {
@@ -410,6 +417,22 @@ fun CustomizeCardScreen(
                     "Greeting scheduled for $formattedDateTime! 🚀 You will receive a high-priority prompt to send when the time arrives.",
                     Toast.LENGTH_LONG
                 ).show()
+            }
+        )
+    }
+
+    if (showGoogleSignInGate) {
+        com.example.ui.components.GoogleSignInRedDialog(
+            actionTitle = "Sign In to Save & Share",
+            actionDescription = "Sign in with Google to protect your 25 credits, customize cards with personal photos, and save creations to your Google account!",
+            onDismiss = {
+                showGoogleSignInGate = false
+                pendingAction = null
+            },
+            onSuccess = {
+                showGoogleSignInGate = false
+                pendingAction?.invoke()
+                pendingAction = null
             }
         )
     }

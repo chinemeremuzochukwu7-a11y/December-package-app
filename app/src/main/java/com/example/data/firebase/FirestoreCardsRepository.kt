@@ -67,6 +67,7 @@ class FirestoreCardsRepository(private val db: FirebaseFirestore) {
         val registration = collection.addSnapshotListener { snapshot, error ->
             if (error != null) {
                 Log.w("FirestoreCardsRepo", "Error listening to saved cards", error)
+                close(error)
                 return@addSnapshotListener
             }
             if (snapshot != null) {
