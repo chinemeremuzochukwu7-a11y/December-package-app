@@ -7,8 +7,12 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    function isValidId(id) {
-      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    // Valid hardware-bound device fingerprint identifier (e.g. dev_<sha256>)
+    function isValidDeviceId(id) {
+      return id is string &&
+             id.size() >= 10 &&
+             id.size() <= 128 &&
+             id.matches('^dev_[a-zA-Z0-9_\\-]+$');
     }
 
     function incoming() {
@@ -19,96 +23,128 @@ service cloud.firestore {
       return resource.data;
     }
 
-    function isSignedIn() {
-      return request.auth != null;
+    function isValidClaimedDeviceCreate(data, deviceId) {
+      return data.deviceId is string &&
+             data.deviceId == deviceId &&
+             data.initialCreditsGranted == 25 &&
+             data.currentCredits == 25 &&
+             data.isPro == false &&
+             (!('isYearly' in data) || data.isYearly is bool) &&
+             (!('lastDailyClaimDate' in data) || (data.lastDailyClaimDate is string && data.lastDailyClaimDate.size() <= 32)) &&
+             (!('lastResetMonth' in data) || (data.lastResetMonth is string && data.lastResetMonth.size() <= 32));
     }
 
-    function isOwner(userId) {
-      return isSignedIn() && request.auth.uid == userId;
+    function isValidClaimedDeviceUpdate(data, prev, deviceId) {
+      return data.deviceId is string &&
+             data.deviceId == deviceId &&
+             (!('initialCreditsGranted' in prev) || data.initialCreditsGranted == prev.initialCreditsGranted) &&
+             (!('claimedAt' in prev) || data.claimedAt == prev.claimedAt) &&
+             data.currentCredits is number &&
+             data.currentCredits >= 0 &&
+             data.isPro is bool &&
+             (data.isPro == true || !('currentCredits' in prev) || data.currentCredits <= prev.currentCredits + 1) &&
+             (!('isYearly' in data) || data.isYearly is bool) &&
+             (!('lastDailyClaimDate' in data) || (data.lastDailyClaimDate is string && data.lastDailyClaimDate.size() <= 32)) &&
+             (!('lastResetMonth' in data) || (data.lastResetMonth is string && data.lastResetMonth.size() <= 32));
     }
 
-    function isValidClaimedDevice(data) {
-      return data.deviceId is string && data.deviceId.size() > 0 && data.deviceId.size() <= 128 &&
-             (!('currentCredits' in data) || data.currentCredits is number) &&
-             (!('initialCreditsGranted' in data) || data.initialCreditsGranted is number) &&
-             (!('isPro' in data) || data.isPro is bool);
-    }
-
-    function isValidUser(data) {
-      return data.userId is string && data.userId.size() > 0 && data.userId.size() <= 128 &&
+    function isValidUserFields(data, userId) {
+      return data.userId is string &&
+             data.userId == userId &&
              data.credits is number &&
+             data.credits >= 0 &&
              data.isPro is bool &&
              (!('email' in data) || (data.email is string && data.email.size() <= 200)) &&
              (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 200)) &&
              (!('isYearly' in data) || data.isYearly is bool) &&
-             (!('starterCreditClaimed' in data) || data.starterCreditClaimed is bool);
+             (!('starterCreditClaimed' in data) || data.starterCreditClaimed is bool) &&
+             (!('lastDailyClaimDate' in data) || (data.lastDailyClaimDate is string && data.lastDailyClaimDate.size() <= 32)) &&
+             (!('lastResetMonth' in data) || (data.lastResetMonth is string && data.lastResetMonth.size() <= 32));
     }
 
-    function isValidSavedCard(data) {
+    function isValidUserCreate(data, userId) {
+      let ledgerExists = exists(/databases/$(database)/documents/claimed_devices/$(userId));
+      return isValidUserFields(data, userId) &&
+             (
+               (!ledgerExists && data.credits == 25 && data.isPro == false) ||
+               (ledgerExists && data.credits == get(/databases/$(database)/documents/claimed_devices/$(userId)).data.currentCredits)
+             );
+    }
+
+    function isValidUserUpdate(data, prev, userId) {
+      return isValidUserFields(data, userId) &&
+             data.userId == prev.userId &&
+             (data.isPro == true || data.credits <= prev.credits + 1);
+    }
+
+    function isValidSavedCard(data, userId) {
       return data.id is string && data.id.size() > 0 && data.id.size() <= 128 &&
-             data.userId is string && data.userId.size() > 0 &&
+             data.userId is string && data.userId == userId &&
              data.templateId is string && data.templateId.size() <= 128 &&
              data.title is string && data.title.size() <= 200 &&
              data.message is string && data.message.size() <= 4000;
     }
 
-    function isValidBirthday(data) {
+    function isValidBirthday(data, userId) {
       return data.id is string && data.id.size() > 0 && data.id.size() <= 128 &&
-             data.userId is string && data.userId.size() > 0 &&
+             data.userId is string && data.userId == userId &&
              data.name is string && data.name.size() > 0 && data.name.size() <= 200 &&
              data.birthDate is string && data.birthDate.size() <= 50;
     }
 
-    function isValidExpense(data) {
+    function isValidExpense(data, userId) {
       return data.id is string && data.id.size() > 0 && data.id.size() <= 128 &&
-             data.userId is string && data.userId.size() > 0 &&
+             data.userId is string && data.userId == userId &&
              data.title is string && data.title.size() > 0 && data.title.size() <= 200 &&
              data.amount is number;
     }
 
-    function isValidMeal(data) {
+    function isValidMeal(data, userId) {
       return data.id is string && data.id.size() > 0 && data.id.size() <= 128 &&
-             data.userId is string && data.userId.size() > 0 &&
+             data.userId is string && data.userId == userId &&
              data.mealType is string && data.mealType.size() <= 50 &&
              data.title is string && data.title.size() > 0 && data.title.size() <= 200;
     }
 
-    // Permanent hardware ledger
+    // Permanent hardware ledger: enforces 25 starter credits max once per device, never deletable
     match /claimed_devices/{deviceId} {
-      allow get: if isValidId(deviceId);
-      allow create, update: if isValidId(deviceId) && isValidClaimedDevice(incoming());
+      allow get: if isValidDeviceId(deviceId);
+      allow list: if false;
+      allow create: if isValidDeviceId(deviceId) && isValidClaimedDeviceCreate(incoming(), deviceId);
+      allow update: if isValidDeviceId(deviceId) && isValidClaimedDeviceUpdate(incoming(), existing(), deviceId);
       allow delete: if false;
     }
 
-    // Authenticated User Profiles & Scoped Collections
+    // Device-Scoped User Profiles & Collections (no login required, anti-credit-abuse enforced)
     match /users/{userId} {
-      allow get: if isOwner(userId);
-      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow create, update: if isOwner(userId) && isValidUser(incoming());
-      allow delete: if isOwner(userId);
+      allow get: if isValidDeviceId(userId);
+      allow list: if false;
+      allow create: if isValidDeviceId(userId) && isValidUserCreate(incoming(), userId);
+      allow update: if isValidDeviceId(userId) && isValidUserUpdate(incoming(), existing(), userId);
+      allow delete: if false;
 
       // User's Saved Holiday Cards
       match /saved_cards/{cardId} {
-        allow get, list, delete: if isOwner(userId);
-        allow create, update: if isOwner(userId) && isValidSavedCard(incoming());
+        allow get, list, delete: if isValidDeviceId(userId);
+        allow create, update: if isValidDeviceId(userId) && isValidSavedCard(incoming(), userId);
       }
 
       // User's Birthdays
       match /birthdays/{birthdayId} {
-        allow get, list, delete: if isOwner(userId);
-        allow create, update: if isOwner(userId) && isValidBirthday(incoming());
+        allow get, list, delete: if isValidDeviceId(userId);
+        allow create, update: if isValidDeviceId(userId) && isValidBirthday(incoming(), userId);
       }
 
       // User's Expenses
       match /expenses/{expenseId} {
-        allow get, list, delete: if isOwner(userId);
-        allow create, update: if isOwner(userId) && isValidExpense(incoming());
+        allow get, list, delete: if isValidDeviceId(userId);
+        allow create, update: if isValidDeviceId(userId) && isValidExpense(incoming(), userId);
       }
 
       // User's Meal Plans
       match /meals/{mealId} {
-        allow get, list, delete: if isOwner(userId);
-        allow create, update: if isOwner(userId) && isValidMeal(incoming());
+        allow get, list, delete: if isValidDeviceId(userId);
+        allow create, update: if isValidDeviceId(userId) && isValidMeal(incoming(), userId);
       }
     }
   }

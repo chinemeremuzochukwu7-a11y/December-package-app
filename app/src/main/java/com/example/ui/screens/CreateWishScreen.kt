@@ -98,8 +98,6 @@ fun CreateWishScreen(
     val generatedWishes by viewModel.generatedWishes.collectAsStateWithLifecycle()
     val favoriteIds by viewModel.favoriteIds.collectAsStateWithLifecycle()
     var selectedWishPhotoUri by remember { mutableStateOf<String?>(null) }
-    val currentUser by com.example.data.firebase.AuthManager.currentUser.collectAsStateWithLifecycle()
-    var showGoogleSignInGate by remember { mutableStateOf(false) }
 
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
@@ -357,11 +355,7 @@ fun CreateWishScreen(
             Spacer(modifier = Modifier.height(20.dp))
             Button(
                 onClick = {
-                    if (currentUser == null) {
-                        showGoogleSignInGate = true
-                    } else {
-                        viewModel.generateWish()
-                    }
+                    viewModel.generateWish()
                 },
                 colors = ButtonDefaults.buttonColors(
                     containerColor = HolidayCrimson,
@@ -406,11 +400,7 @@ fun CreateWishScreen(
 
                     IconButton(
                         onClick = {
-                            if (currentUser == null) {
-                                showGoogleSignInGate = true
-                            } else {
-                                viewModel.generateWish()
-                            }
+                            viewModel.generateWish()
                         },
                         modifier = Modifier.testTag("regenerate_button")
                     ) {
@@ -433,18 +423,6 @@ fun CreateWishScreen(
                 )
             }
         }
-    }
-
-    if (showGoogleSignInGate) {
-        com.example.ui.components.GoogleSignInRedDialog(
-            actionTitle = "Sign In to Generate Wishes",
-            actionDescription = "Sign in with Google before generating custom holiday wishes to protect your 25 credits and save your creations to the cloud!",
-            onDismiss = { showGoogleSignInGate = false },
-            onSuccess = {
-                showGoogleSignInGate = false
-                viewModel.generateWish()
-            }
-        )
     }
 }
 

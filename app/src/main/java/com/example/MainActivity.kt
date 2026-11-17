@@ -56,21 +56,14 @@ fun HolidayWishesApp(
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
 
-    val currentUser by com.example.data.firebase.AuthManager.currentUser.collectAsStateWithLifecycle()
-    var showAccountSignInDialog by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
-
-    // Silent account auto-detection on app start/resume (detects if account was previously authorized on device)
-    LaunchedEffect(Unit) {
-        com.example.data.firebase.AuthManager.attemptAutoSignIn(context)
-    }
-
-    // Synchronize user profile & initial 25 credits with Firestore on app open
-    val activeUserId = currentUser?.uid ?: currentUserId
-    LaunchedEffect(activeUserId) {
-        if (activeUserId.isNotBlank()) {
+    // Synchronize user profile & existing credit balance with Firestore on app open
+    LaunchedEffect(currentUserId) {
+        if (currentUserId.isNotBlank()) {
             val repo = UserFirestoreRepository(context)
-            repo.ensureUserInitialized(activeUserId)
-            repo.observeUserProfile(activeUserId).collect { /* updates SubscriptionManager */ }
+            try {
+                repo.ensureUserInitialized(currentUserId)
+                repo.observeUserProfile(currentUserId).collect { /* updates SubscriptionManager */ }
+            } catch (_: Exception) {}
         }
     }
     val navController = rememberNavController()
@@ -165,9 +158,6 @@ fun HolidayWishesApp(
                             navController.navigate(Screen.ProSubscription.route) {
                                 launchSingleTop = true
                             }
-                        },
-                        onAccountClick = {
-                            showAccountSignInDialog = true
                         }
                     )
                 }
@@ -207,11 +197,6 @@ fun HolidayWishesApp(
                 modifier = Modifier.padding(innerPadding)
             )
             MagicRatingDialog()
-            if (showAccountSignInDialog) {
-                com.example.ui.components.GoogleSignInRedDialog(
-                    onDismiss = { showAccountSignInDialog = false }
-                )
-            }
         }
     }
 }

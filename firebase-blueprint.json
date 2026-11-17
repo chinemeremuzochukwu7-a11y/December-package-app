@@ -2,26 +2,29 @@
   "entities": {
     "ClaimedDevice": {
       "title": "ClaimedDevice",
-      "description": "Hardware device fingerprint ledger preventing duplicate starter credit claims",
+      "description": "Permanent hardware device fingerprint ledger preventing duplicate starter credit claims after storage clear or reinstall",
       "type": "object",
       "properties": {
-        "deviceId": { "type": "string", "description": "Device fingerprint identifier" },
+        "deviceId": { "type": "string", "description": "Hardware-bound device fingerprint identifier" },
         "claimedAt": { "type": "string", "description": "Timestamp when device first claimed credits" },
         "initialCreditsGranted": { "type": "number", "description": "Initial credits granted (25)" },
         "currentCredits": { "type": "number", "description": "Latest credit balance backup" },
+        "isPro": { "type": "boolean", "description": "Pro subscription status" },
+        "isYearly": { "type": "boolean", "description": "Yearly Pro subscription status" },
+        "lastDailyClaimDate": { "type": "string", "description": "Date YYYY-MM-DD of last daily reward claim" },
+        "lastResetMonth": { "type": "string", "description": "Month YYYY-MM of last Pro credit reset" },
         "lastSyncedAt": { "type": "string", "description": "Last synchronization timestamp" },
-        "lastUpdated": { "type": "string", "description": "Last update timestamp" },
-        "isPro": { "type": "boolean", "description": "Pro subscription status" }
+        "lastUpdated": { "type": "string", "description": "Last update timestamp" }
       },
-      "required": ["deviceId"]
+      "required": ["deviceId", "initialCreditsGranted", "currentCredits", "isPro"]
     },
     "User": {
       "title": "User",
-      "description": "User profile with persistent credits, subscriptions, and settings",
+      "description": "Device-bound user profile with persistent credits, subscriptions, and settings",
       "type": "object",
       "properties": {
-        "userId": { "type": "string", "description": "The Firebase Auth UID" },
-        "email": { "type": "string", "description": "User email address" },
+        "userId": { "type": "string", "description": "Permanent hardware-bound device identifier" },
+        "email": { "type": "string", "description": "Optional user contact label" },
         "displayName": { "type": "string", "description": "Display name of the user" },
         "credits": { "type": "number", "description": "Available credits / tokens balance" },
         "isPro": { "type": "boolean", "description": "Whether the user has active Pro access" },
@@ -29,7 +32,7 @@
         "starterCreditClaimed": { "type": "boolean", "description": "Flag for starter credit claim" },
         "lastDailyClaimDate": { "type": "string", "description": "Date of last daily reward claim" },
         "lastResetMonth": { "type": "string", "description": "Month of last monthly allowance reset" },
-        "createdAt": { "type": "string", "description": "Account registration timestamp" },
+        "createdAt": { "type": "string", "description": "Profile creation timestamp" },
         "updatedAt": { "type": "string", "description": "Last update timestamp" }
       },
       "required": ["userId", "credits", "isPro"]
@@ -40,7 +43,7 @@
       "type": "object",
       "properties": {
         "id": { "type": "string", "description": "Card unique identifier" },
-        "userId": { "type": "string", "description": "Owner user UID" },
+        "userId": { "type": "string", "description": "Owner device userId" },
         "templateId": { "type": "string", "description": "Source template identifier" },
         "title": { "type": "string", "description": "Card title" },
         "recipientName": { "type": "string", "description": "Card recipient name" },
@@ -64,7 +67,7 @@
       "type": "object",
       "properties": {
         "id": { "type": "string", "description": "Unique identifier" },
-        "userId": { "type": "string", "description": "Owner user UID" },
+        "userId": { "type": "string", "description": "Owner device userId" },
         "name": { "type": "string", "description": "Person name" },
         "birthDate": { "type": "string", "description": "Birth date string YYYY-MM-DD" },
         "relationship": { "type": "string", "description": "Relationship" },
@@ -79,7 +82,7 @@
       "type": "object",
       "properties": {
         "id": { "type": "string", "description": "Unique identifier" },
-        "userId": { "type": "string", "description": "Owner user UID" },
+        "userId": { "type": "string", "description": "Owner device userId" },
         "title": { "type": "string", "description": "Expense title or item" },
         "amount": { "type": "number", "description": "Expense amount" },
         "category": { "type": "string", "description": "Category: Gifts, Food, Travel, etc" },
@@ -94,7 +97,7 @@
       "type": "object",
       "properties": {
         "id": { "type": "string", "description": "Unique identifier" },
-        "userId": { "type": "string", "description": "Owner user UID" },
+        "userId": { "type": "string", "description": "Owner device userId" },
         "mealType": { "type": "string", "description": "Breakfast, Lunch, Dinner, Dessert" },
         "title": { "type": "string", "description": "Dish title" },
         "recipe": { "type": "string", "description": "Recipe or notes" },
@@ -111,7 +114,7 @@
     },
     "/users/{userId}": {
       "schema": "User",
-      "description": "User profile with persistent credits and subscription status"
+      "description": "Device-bound user profile with persistent credits and subscription status"
     },
     "/users/{userId}/saved_cards/{cardId}": {
       "schema": "SavedCard",

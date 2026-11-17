@@ -15,6 +15,9 @@ import com.android.billingclient.api.Purchase
 import com.android.billingclient.api.PurchasesUpdatedListener
 import com.android.billingclient.api.QueryProductDetailsParams
 import com.android.billingclient.api.QueryPurchasesParams
+import com.example.R
+import com.example.data.firebase.UserFirestoreRepository
+import com.example.utils.NetworkUtils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -22,11 +25,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import com.example.R
-import com.example.data.firebase.UserFirestoreRepository
-import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.FieldValue
-import com.google.firebase.firestore.SetOptions
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -49,8 +47,8 @@ data class BillingPlan(
 
 /**
  * Manages Google Play Billing Client, purchases, entitlements, and AI credits.
- * Provides permanent hardware-bound cloud protection so user credits and entitlements
- * survive "Clear Data / Storage" without requiring manual login/password registration.
+ * Uses hardware-bound Cloud Firestore synchronization so credit balances and daily claims
+ * survive "Clear Data / Storage" without requiring Google login or granting duplicate credits.
  */
 object SubscriptionManager : PurchasesUpdatedListener {
     private const val TAG = "SubscriptionManager"
@@ -128,7 +126,8 @@ object SubscriptionManager : PurchasesUpdatedListener {
     private val _isPro = MutableStateFlow(false)
     val isPro: StateFlow<Boolean> = _isPro.asStateFlow()
 
-    private val _credits = MutableStateFlow(25) // 25 free starter credits provisional
+    // Start at 0 until either local cache (KEY_CREDITS_INITIALIZED) or Firestore confirms real balance
+    private val _credits = MutableStateFlow(0)
     val credits: StateFlow<Int> = _credits.asStateFlow()
 
     private val _isCloudSynced = MutableStateFlow(false)
@@ -152,35 +151,40 @@ object SubscriptionManager : PurchasesUpdatedListener {
     private val productDetailsMap = mutableMapOf<String, ProductDetails>()
 
     fun initialize(context: Context) {
-        appContext = context.applicationContext
-        val dbId = try { context.getString(R.string.firestore_database_id) } catch (_: Exception) { null }
-        if (prefs == null) {
-            prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            val hasCachedCredits = prefs?.getBoolean(KEY_CREDITS_INITIALIZED, false) ?: false
-            _isPro.value = prefs?.getBoolean(KEY_IS_PRO, false) ?: false
-            _activeTier.value = prefs?.getString(KEY_ACTIVE_TIER, "Free") ?: "Free"
-            if (hasCachedCredits) {
-                _credits.value = prefs?.getInt(KEY_CREDITS, 25) ?: 25
-            }
-        }
-        val userId = UserFirestoreRepository.getOrCreateUserId(context)
-        prefs?.edit()?.putString("current_user_id", userId)?.apply()
-        if (dbId != null) {
-            prefs?.edit()?.putString("firestore_db_id", dbId)?.apply()
+        val ctx = context.applicationContext
+        appContext = ctx
+        val dbId = try { ctx.getString(R.string.firestore_database_id) } catch (_: Exception) { null }
+        val prefsRef = prefs ?: ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).also { prefs = it }
+
+        val hasCachedCredits = prefsRef.getBoolean(KEY_CREDITS_INITIALIZED, false)
+        if (hasCachedCredits) {
+            _isPro.value = prefsRef.getBoolean(KEY_IS_PRO, false)
+            _activeTier.value = prefsRef.getString(KEY_ACTIVE_TIER, "Free") ?: "Free"
+            _credits.value = prefsRef.getInt(KEY_CREDITS, 0)
+            checkMonthlyResetAndDailyReward()
+        } else {
+            // Storage was cleared or brand new install: keep at 0 and disallow daily claim until cloud sync finishes
+            _isPro.value = false
+            _activeTier.value = "Free"
+            _credits.value = 0
+            _canClaimDailyCredit.value = false
         }
 
-        // Check local monthly rollover & daily reward
-        checkMonthlyResetAndDailyReward()
+        val userId = UserFirestoreRepository.getOrCreateUserId(ctx)
+        prefsRef.edit().apply {
+            putString("current_user_id", userId)
+            if (dbId != null) putString("firestore_db_id", dbId)
+        }.apply()
 
-        // Kick off cloud synchronization immediately to verify/restore credits
-        syncWithCloud(context)
+        // Sync immediately with Cloud Firestore to restore exact remaining balance & daily claim date
+        syncWithCloud(ctx)
 
         try {
             val pendingPurchasesParams = PendingPurchasesParams.newBuilder()
                 .enableOneTimeProducts()
                 .build()
 
-            billingClient = BillingClient.newBuilder(context)
+            billingClient = BillingClient.newBuilder(ctx)
                 .setListener(this)
                 .enablePendingPurchases(pendingPurchasesParams)
                 .build()
@@ -196,6 +200,7 @@ object SubscriptionManager : PurchasesUpdatedListener {
      */
     fun syncWithCloud(context: Context) {
         val app = context.applicationContext
+        appContext = app
         scope.launch {
             try {
                 _isSyncing.value = true
@@ -206,6 +211,7 @@ object SubscriptionManager : PurchasesUpdatedListener {
                 _isPro.value = profile.isPro
                 _isCloudSynced.value = true
                 _isSyncing.value = false
+                checkMonthlyResetAndDailyReward()
                 Log.d(TAG, "Synchronized persistent credits from cloud: ${profile.credits}")
             } catch (e: Exception) {
                 _isSyncing.value = false
@@ -221,15 +227,17 @@ object SubscriptionManager : PurchasesUpdatedListener {
         context: Context,
         onResult: (success: Boolean, balance: Int, message: String) -> Unit
     ) {
-        if (!com.example.utils.NetworkUtils.isNetworkAvailable(context)) {
+        val app = context.applicationContext
+        appContext = app
+        if (!NetworkUtils.isNetworkAvailable(app)) {
             onResult(false, _credits.value, "Internet connection required to verify and restore credits from cloud.")
             return
         }
         _isSyncing.value = true
         scope.launch {
             try {
-                val userId = UserFirestoreRepository.getOrCreateUserId(context)
-                val repo = UserFirestoreRepository(context)
+                val userId = UserFirestoreRepository.getOrCreateUserId(app)
+                val repo = UserFirestoreRepository(app)
                 val profile = repo.ensureUserInitialized(userId)
                 withContext(Dispatchers.Main) {
                     _credits.value = profile.credits.toInt()
@@ -251,27 +259,15 @@ object SubscriptionManager : PurchasesUpdatedListener {
         }
     }
 
-    private fun getFirestoreInstance(): FirebaseFirestore {
-        val ctx = appContext
-        val databaseId = prefs?.getString("firestore_db_id", null)
-            ?: ctx?.let {
-                try { it.getString(R.string.firestore_database_id) } catch (_: Exception) { null }
-            }
-        return if (!databaseId.isNullOrBlank()) {
-            try {
-                FirebaseFirestore.getInstance(databaseId)
-            } catch (_: Exception) {
-                FirebaseFirestore.getInstance()
-            }
-        } else {
-            FirebaseFirestore.getInstance()
-        }
-    }
-
     private fun getUserId(): String {
         return prefs?.getString("current_user_id", null)
             ?: appContext?.let { UserFirestoreRepository.getOrCreateUserId(it) }
             ?: ""
+    }
+
+    private fun getRepo(): UserFirestoreRepository? {
+        val ctx = appContext ?: return null
+        return UserFirestoreRepository(ctx)
     }
 
     private fun connectToBilling() {
@@ -282,7 +278,7 @@ object SubscriptionManager : PurchasesUpdatedListener {
                     queryProducts()
                     restorePurchases()
                 } else {
-                    Log.i(TAG, "Billing service not available on this environment (demo/sandbox active): ${billingResult.debugMessage}")
+                    Log.i(TAG, "Billing service not available on this environment: ${billingResult.debugMessage}")
                 }
             }
 
@@ -327,7 +323,7 @@ object SubscriptionManager : PurchasesUpdatedListener {
     }
 
     /**
-     * Launches Google Play Billing Flow for a plan
+     * Launches Google Play Billing Flow for a plan after verifying active Wi-Fi or cellular data.
      */
     fun purchase(
         activity: Activity,
@@ -336,8 +332,7 @@ object SubscriptionManager : PurchasesUpdatedListener {
         onSuccess: () -> Unit = {},
         onError: (String) -> Unit = {}
     ) {
-        // Verify active internet connection (Wi-Fi or cellular data) before Google Play Billing
-        if (!com.example.utils.NetworkUtils.isNetworkAvailable(activity)) {
+        if (!NetworkUtils.isNetworkAvailable(activity)) {
             val msg = "No internet connection detected. Please connect to Wi-Fi or mobile cellular data before upgrading."
             _error.value = msg
             onError(msg)
@@ -346,7 +341,6 @@ object SubscriptionManager : PurchasesUpdatedListener {
 
         val client = billingClient
         if (client == null || !client.isReady) {
-            // Demo/Sandbox fallback for development when testing without play store service
             simulatePurchaseSuccess(plan, isYearly)
             onSuccess()
             return
@@ -375,7 +369,6 @@ object SubscriptionManager : PurchasesUpdatedListener {
                 onError(msg)
             }
         } else {
-            // Sandbox/Dev environment activation
             simulatePurchaseSuccess(plan, isYearly)
             onSuccess()
         }
@@ -399,13 +392,11 @@ object SubscriptionManager : PurchasesUpdatedListener {
         _isPro.value = isPro
         prefs?.edit()?.putBoolean(KEY_IS_PRO, isPro)?.apply()
         val userId = getUserId()
-        if (userId.isNotBlank()) {
-            val db = getFirestoreInstance()
-            val now = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).format(Date())
-            db.collection("users").document(userId).set(
-                mapOf("isPro" to isPro, "updatedAt" to now),
-                SetOptions.merge()
-            )
+        val repo = getRepo()
+        if (userId.isNotBlank() && repo != null) {
+            scope.launch {
+                repo.updateProStatus(userId = userId, isPro = isPro)
+            }
         }
     }
 
@@ -422,6 +413,12 @@ object SubscriptionManager : PurchasesUpdatedListener {
      */
     fun checkMonthlyResetAndDailyReward() {
         val prefsRef = prefs ?: return
+        val hasInitialized = prefsRef.getBoolean(KEY_CREDITS_INITIALIZED, false) || _isCloudSynced.value
+        if (!hasInitialized) {
+            _canClaimDailyCredit.value = false
+            return
+        }
+
         val currentMonth = SimpleDateFormat("yyyy-MM", Locale.US).format(Date())
         val todayDate = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
 
@@ -434,67 +431,90 @@ object SubscriptionManager : PurchasesUpdatedListener {
         // Only Pro / Yearly subscribers have their 300 credits refreshed on month rollover
         if (lastResetMonth != null && lastResetMonth != currentMonth) {
             if (isYearlyActive || _isPro.value) {
-                setCreditsDirect(300)
-                prefsRef.edit().putString(KEY_LAST_RESET_MONTH, currentMonth).apply()
+                _credits.value = 300
+                prefsRef.edit()
+                    .putInt(KEY_CREDITS, 300)
+                    .putBoolean(KEY_CREDITS_INITIALIZED, true)
+                    .putString(KEY_LAST_RESET_MONTH, currentMonth)
+                    .apply()
                 val userId = getUserId()
-                if (userId.isNotBlank()) {
-                    val db = getFirestoreInstance()
-                    db.collection("users").document(userId).set(
-                        mapOf("credits" to 300L, "lastResetMonth" to currentMonth),
-                        SetOptions.merge()
-                    )
+                val repo = getRepo()
+                if (userId.isNotBlank() && repo != null) {
+                    scope.launch {
+                        repo.updateProStatus(
+                            userId = userId,
+                            isPro = true,
+                            isYearly = isYearlyActive,
+                            credits = 300L,
+                            lastResetMonth = currentMonth
+                        )
+                    }
                 }
             }
         }
 
-        // Daily Free Credit claim check (1 free credit per day upon entering)
         val lastDailyClaimDate = prefsRef.getString(KEY_LAST_DAILY_CLAIM_DATE, null)
         _canClaimDailyCredit.value = (lastDailyClaimDate != todayDate)
     }
 
     /**
-     * Claims the daily free credit (1 credit per day) with dual-layer cloud persistence.
+     * Claims the daily free credit (1 credit per day) backed by an atomic Firestore transaction
+     * so clearing storage cannot reset or duplicate daily rewards.
      */
     fun claimDailyCredit(): Boolean {
         val prefsRef = prefs ?: return false
+        val hasInitialized = _isCloudSynced.value || prefsRef.getBoolean(KEY_CREDITS_INITIALIZED, false)
+        if (!hasInitialized) {
+            val ctx = appContext
+            if (ctx != null) syncWithCloud(ctx)
+            return false
+        }
+
         val todayDate = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
         val lastClaim = prefsRef.getString(KEY_LAST_DAILY_CLAIM_DATE, null)
-        if (lastClaim != todayDate) {
-            addCredits(1)
-            prefsRef.edit().putString(KEY_LAST_DAILY_CLAIM_DATE, todayDate).apply()
-            val userId = getUserId()
-            if (userId.isNotBlank()) {
-                val db = getFirestoreInstance()
-                db.collection("users").document(userId).set(
-                    mapOf("lastDailyClaimDate" to todayDate),
-                    SetOptions.merge()
-                )
-            }
+        if (lastClaim == todayDate) {
             _canClaimDailyCredit.value = false
-            return true
+            return false
         }
-        return false
-    }
 
-    private fun setCreditsDirect(amount: Int) {
-        _credits.value = amount
-        prefs?.edit()
-            ?.putInt(KEY_CREDITS, amount)
-            ?.putBoolean(KEY_CREDITS_INITIALIZED, true)
-            ?.apply()
+        val previousCredits = _credits.value
+        val optimisticCredits = previousCredits + 1
+        _credits.value = optimisticCredits
+        _canClaimDailyCredit.value = false
+        prefsRef.edit()
+            .putInt(KEY_CREDITS, optimisticCredits)
+            .putString(KEY_LAST_DAILY_CLAIM_DATE, todayDate)
+            .putBoolean(KEY_CREDITS_INITIALIZED, true)
+            .apply()
+
         val userId = getUserId()
-        if (userId.isNotBlank()) {
-            val db = getFirestoreInstance()
-            val now = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).format(Date())
-            db.collection("users").document(userId).set(
-                mapOf("credits" to amount.toLong(), "updatedAt" to now),
-                SetOptions.merge()
-            )
-            db.collection("claimed_devices").document(userId).set(
-                mapOf("currentCredits" to amount.toLong(), "lastUpdated" to now),
-                SetOptions.merge()
-            )
+        val repo = getRepo()
+        if (userId.isNotBlank() && repo != null) {
+            scope.launch {
+                try {
+                    val committedCredits = repo.claimDailyCredit(userId, todayDate)
+                    if (committedCredits != null) {
+                        _credits.value = committedCredits.toInt()
+                        prefsRef.edit()
+                            .putInt(KEY_CREDITS, committedCredits.toInt())
+                            .putString(KEY_LAST_DAILY_CLAIM_DATE, todayDate)
+                            .apply()
+                    } else {
+                        // Cloud confirmed it was already claimed today on this hardware device
+                        val profile = repo.ensureUserInitialized(userId)
+                        _credits.value = profile.credits.toInt()
+                        _canClaimDailyCredit.value = false
+                        prefsRef.edit()
+                            .putInt(KEY_CREDITS, profile.credits.toInt())
+                            .putString(KEY_LAST_DAILY_CLAIM_DATE, todayDate)
+                            .apply()
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Error persisting daily claim: ${e.message}")
+                }
+            }
         }
+        return true
     }
 
     /**
@@ -503,49 +523,35 @@ object SubscriptionManager : PurchasesUpdatedListener {
     private fun simulatePurchaseSuccess(plan: BillingPlan, isYearly: Boolean) {
         _isPro.value = true
         val currentMonth = SimpleDateFormat("yyyy-MM", Locale.US).format(Date())
-        val now = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).format(Date())
-        if (isYearly) {
-            _credits.value = 300
-            _activeTier.value = "Holiday Pro Yearly (300 Credits/mo for 1 Year)"
-            prefs?.edit()
-                ?.putBoolean(KEY_IS_PRO, true)
-                ?.putBoolean(KEY_IS_YEARLY, true)
-                ?.putBoolean(KEY_CREDITS_INITIALIZED, true)
-                ?.putLong(KEY_YEARLY_UPGRADE_TIME, System.currentTimeMillis())
-                ?.putString(KEY_LAST_RESET_MONTH, currentMonth)
-                ?.putInt(KEY_CREDITS, 300)
-                ?.putString(KEY_ACTIVE_TIER, _activeTier.value)
-                ?.apply()
+        _credits.value = 300
+        _activeTier.value = if (isYearly) {
+            "Holiday Pro Yearly (300 Credits/mo for 1 Year)"
         } else {
-            _credits.value = 300
-            _activeTier.value = "Holiday Pro Monthly (300 Credits/mo)"
-            prefs?.edit()
-                ?.putBoolean(KEY_IS_PRO, true)
-                ?.putBoolean(KEY_IS_YEARLY, false)
-                ?.putBoolean(KEY_CREDITS_INITIALIZED, true)
-                ?.putString(KEY_LAST_RESET_MONTH, currentMonth)
-                ?.putInt(KEY_CREDITS, 300)
-                ?.putString(KEY_ACTIVE_TIER, _activeTier.value)
-                ?.apply()
+            "Holiday Pro Monthly (300 Credits/mo)"
         }
 
+        prefs?.edit()?.apply {
+            putBoolean(KEY_IS_PRO, true)
+            putBoolean(KEY_IS_YEARLY, isYearly)
+            putBoolean(KEY_CREDITS_INITIALIZED, true)
+            if (isYearly) putLong(KEY_YEARLY_UPGRADE_TIME, System.currentTimeMillis())
+            putString(KEY_LAST_RESET_MONTH, currentMonth)
+            putInt(KEY_CREDITS, 300)
+            putString(KEY_ACTIVE_TIER, _activeTier.value)
+        }?.apply()
+
         val userId = getUserId()
-        if (userId.isNotBlank()) {
-            val db = getFirestoreInstance()
-            db.collection("users").document(userId).set(
-                mapOf(
-                    "isPro" to true,
-                    "isYearly" to isYearly,
-                    "credits" to 300L,
-                    "lastResetMonth" to currentMonth,
-                    "updatedAt" to now
-                ),
-                SetOptions.merge()
-            )
-            db.collection("claimed_devices").document(userId).set(
-                mapOf("isPro" to true, "currentCredits" to 300L, "lastUpdated" to now),
-                SetOptions.merge()
-            )
+        val repo = getRepo()
+        if (userId.isNotBlank() && repo != null) {
+            scope.launch {
+                repo.updateProStatus(
+                    userId = userId,
+                    isPro = true,
+                    isYearly = isYearly,
+                    credits = 300L,
+                    lastResetMonth = currentMonth
+                )
+            }
         }
     }
 
@@ -567,49 +573,35 @@ object SubscriptionManager : PurchasesUpdatedListener {
             _isPro.value = true
             val isYearly = purchase.products.contains(PRODUCT_YEARLY)
             val currentMonth = SimpleDateFormat("yyyy-MM", Locale.US).format(Date())
-            val now = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).format(Date())
-            if (isYearly) {
-                _credits.value = 300
-                _activeTier.value = "Holiday Pro Yearly (300 Credits/mo for 1 Year)"
-                prefs?.edit()
-                    ?.putBoolean(KEY_IS_PRO, true)
-                    ?.putBoolean(KEY_IS_YEARLY, true)
-                    ?.putBoolean(KEY_CREDITS_INITIALIZED, true)
-                    ?.putLong(KEY_YEARLY_UPGRADE_TIME, System.currentTimeMillis())
-                    ?.putString(KEY_LAST_RESET_MONTH, currentMonth)
-                    ?.putInt(KEY_CREDITS, 300)
-                    ?.putString(KEY_ACTIVE_TIER, _activeTier.value)
-                    ?.apply()
+            _credits.value = 300
+            _activeTier.value = if (isYearly) {
+                "Holiday Pro Yearly (300 Credits/mo for 1 Year)"
             } else {
-                _credits.value = 300
-                _activeTier.value = "Holiday Pro Monthly (300 Credits/mo)"
-                prefs?.edit()
-                    ?.putBoolean(KEY_IS_PRO, true)
-                    ?.putBoolean(KEY_IS_YEARLY, false)
-                    ?.putBoolean(KEY_CREDITS_INITIALIZED, true)
-                    ?.putString(KEY_LAST_RESET_MONTH, currentMonth)
-                    ?.putInt(KEY_CREDITS, 300)
-                    ?.putString(KEY_ACTIVE_TIER, _activeTier.value)
-                    ?.apply()
+                "Holiday Pro Monthly (300 Credits/mo)"
             }
 
+            prefs?.edit()?.apply {
+                putBoolean(KEY_IS_PRO, true)
+                putBoolean(KEY_IS_YEARLY, isYearly)
+                putBoolean(KEY_CREDITS_INITIALIZED, true)
+                if (isYearly) putLong(KEY_YEARLY_UPGRADE_TIME, System.currentTimeMillis())
+                putString(KEY_LAST_RESET_MONTH, currentMonth)
+                putInt(KEY_CREDITS, 300)
+                putString(KEY_ACTIVE_TIER, _activeTier.value)
+            }?.apply()
+
             val userId = getUserId()
-            if (userId.isNotBlank()) {
-                val db = getFirestoreInstance()
-                db.collection("users").document(userId).set(
-                    mapOf(
-                        "isPro" to true,
-                        "isYearly" to isYearly,
-                        "credits" to 300L,
-                        "lastResetMonth" to currentMonth,
-                        "updatedAt" to now
-                    ),
-                    SetOptions.merge()
-                )
-                db.collection("claimed_devices").document(userId).set(
-                    mapOf("isPro" to true, "currentCredits" to 300L, "lastUpdated" to now),
-                    SetOptions.merge()
-                )
+            val repo = getRepo()
+            if (userId.isNotBlank() && repo != null) {
+                scope.launch {
+                    repo.updateProStatus(
+                        userId = userId,
+                        isPro = true,
+                        isYearly = isYearly,
+                        credits = 300L,
+                        lastResetMonth = currentMonth
+                    )
+                }
             }
 
             val client = billingClient ?: return
@@ -632,7 +624,7 @@ object SubscriptionManager : PurchasesUpdatedListener {
      */
     fun restorePurchases(onComplete: ((Boolean) -> Unit)? = null) {
         val ctx = appContext
-        if (ctx != null && !com.example.utils.NetworkUtils.isNetworkAvailable(ctx)) {
+        if (ctx != null && !NetworkUtils.isNetworkAvailable(ctx)) {
             val msg = "No internet connection detected. Please connect to Wi-Fi or mobile data to restore purchases."
             _error.value = msg
             onComplete?.invoke(_isPro.value)
@@ -670,20 +662,27 @@ object SubscriptionManager : PurchasesUpdatedListener {
         lastDailyClaimDate: String? = null,
         lastResetMonth: String? = null
     ) {
-        _credits.value = firestoreCredits
+        val safeCredits = firestoreCredits.coerceAtLeast(0)
+        _credits.value = safeCredits
         _isPro.value = firestoreIsPro
         _isCloudSynced.value = true
+
+        val todayDate = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+        val effectiveClaimDate = lastDailyClaimDate?.takeIf { it.isNotBlank() }
+
         val editor = prefs?.edit()
-            ?.putInt(KEY_CREDITS, firestoreCredits)
+            ?.putInt(KEY_CREDITS, safeCredits)
             ?.putBoolean(KEY_IS_PRO, firestoreIsPro)
             ?.putBoolean(KEY_IS_YEARLY, isYearly)
             ?.putBoolean(KEY_CREDITS_INITIALIZED, true)
 
-        if (!lastDailyClaimDate.isNullOrBlank()) {
-            editor?.putString(KEY_LAST_DAILY_CLAIM_DATE, lastDailyClaimDate)
-            val todayDate = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
-            _canClaimDailyCredit.value = (lastDailyClaimDate != todayDate)
+        if (effectiveClaimDate != null) {
+            editor?.putString(KEY_LAST_DAILY_CLAIM_DATE, effectiveClaimDate)
+        } else {
+            editor?.remove(KEY_LAST_DAILY_CLAIM_DATE)
         }
+        _canClaimDailyCredit.value = (effectiveClaimDate != todayDate)
+
         if (!lastResetMonth.isNullOrBlank()) {
             editor?.putString(KEY_LAST_RESET_MONTH, lastResetMonth)
         }
@@ -695,6 +694,7 @@ object SubscriptionManager : PurchasesUpdatedListener {
     }
 
     fun addCredits(amount: Int) {
+        if (amount <= 0) return
         val newTotal = _credits.value + amount
         _credits.value = newTotal
         prefs?.edit()
@@ -702,25 +702,12 @@ object SubscriptionManager : PurchasesUpdatedListener {
             ?.putBoolean(KEY_CREDITS_INITIALIZED, true)
             ?.apply()
 
-        // Atomically sync to Cloud Firestore
         val userId = getUserId()
-        if (userId.isNotBlank()) {
-            val db = getFirestoreInstance()
-            val now = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).format(Date())
-            db.collection("users").document(userId).set(
-                mapOf(
-                    "credits" to FieldValue.increment(amount.toLong()),
-                    "updatedAt" to now
-                ),
-                SetOptions.merge()
-            )
-            db.collection("claimed_devices").document(userId).set(
-                mapOf(
-                    "currentCredits" to FieldValue.increment(amount.toLong()),
-                    "lastUpdated" to now
-                ),
-                SetOptions.merge()
-            )
+        val repo = getRepo()
+        if (userId.isNotBlank() && repo != null) {
+            scope.launch {
+                repo.addCredits(userId, amount)
+            }
         }
     }
 
@@ -730,7 +717,7 @@ object SubscriptionManager : PurchasesUpdatedListener {
     }
 
     fun useCredits(amount: Int): Boolean {
-        if (_isPro.value && isYearlySubscriber()) return true // Yearly subscribers have unlimited credits
+        if (_isPro.value && isYearlySubscriber()) return true
         val current = _credits.value
         if (current >= amount) {
             val newTotal = current - amount
@@ -740,25 +727,18 @@ object SubscriptionManager : PurchasesUpdatedListener {
                 ?.putBoolean(KEY_CREDITS_INITIALIZED, true)
                 ?.apply()
 
-            // Atomically deduct from Cloud Firestore
             val userId = getUserId()
-            if (userId.isNotBlank()) {
-                val db = getFirestoreInstance()
-                val now = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).format(Date())
-                db.collection("users").document(userId).set(
-                    mapOf(
-                        "credits" to FieldValue.increment(-amount.toLong()),
-                        "updatedAt" to now
-                    ),
-                    SetOptions.merge()
-                )
-                db.collection("claimed_devices").document(userId).set(
-                    mapOf(
-                        "currentCredits" to FieldValue.increment(-amount.toLong()),
-                        "lastUpdated" to now
-                    ),
-                    SetOptions.merge()
-                )
+            val repo = getRepo()
+            if (userId.isNotBlank() && repo != null) {
+                scope.launch {
+                    val ok = repo.deductCredits(userId, amount)
+                    if (!ok) {
+                        // Reconcile local state with Firestore if deduction failed due to desync
+                        try {
+                            repo.ensureUserInitialized(userId)
+                        } catch (_: Exception) {}
+                    }
+                }
             }
             return true
         }

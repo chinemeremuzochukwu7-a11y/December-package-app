@@ -69,13 +69,6 @@ import com.example.ui.theme.HolidayCrimson
 import com.example.ui.viewmodel.HolidayViewModel
 import com.example.ui.viewmodel.SettingsDialogType
 
-import androidx.compose.material.icons.filled.AccountCircle
-import androidx.compose.material.icons.filled.ExitToApp
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Shield
-import android.widget.Toast
-import com.example.data.firebase.AuthManager
-import com.example.ui.components.GoogleSignInRedDialog
 import com.example.ui.theme.HolidayGold
 
 @Composable
@@ -89,8 +82,6 @@ fun SettingsScreen(
     val credits by SubscriptionManager.credits.collectAsState()
     val isCloudSynced by SubscriptionManager.isCloudSynced.collectAsState()
     val isSyncing by SubscriptionManager.isSyncing.collectAsState()
-    val currentUser by AuthManager.currentUser.collectAsStateWithLifecycle()
-    var showGoogleSignInDialog by remember { mutableStateOf(false) }
     val context = androidx.compose.ui.platform.LocalContext.current
     val deviceId = remember { com.example.data.firebase.UserFirestoreRepository.getOrCreateUserId(context) }
     var restoreDialogMessage by remember { mutableStateOf<String?>(null) }
@@ -107,206 +98,6 @@ fun SettingsScreen(
             .padding(16.dp)
             .testTag("settings_screen")
     ) {
-        // Dedicated Festive Red Google Account Card
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 16.dp)
-                .testTag("settings_google_account_card"),
-            shape = RoundedCornerShape(22.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.Transparent),
-            border = BorderStroke(1.5.dp, HolidayGold)
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(
-                        brush = Brush.verticalGradient(
-                            colors = listOf(
-                                Color(0xFF8B0000), // Holiday Crimson
-                                Color(0xFF5A000A)  // Deep Wine
-                            )
-                        )
-                    )
-                    .padding(18.dp)
-            ) {
-                if (currentUser != null) {
-                    val user = currentUser!!
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(52.dp)
-                                    .clip(CircleShape)
-                                    .background(HolidayGold.copy(alpha = 0.2f))
-                                    .border(2.dp, HolidayGold, CircleShape),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.AccountCircle,
-                                    contentDescription = "User Avatar",
-                                    tint = HolidayGold,
-                                    modifier = Modifier.size(36.dp)
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.width(14.dp))
-
-                            Column(modifier = Modifier.weight(1f)) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(
-                                        text = user.displayName?.ifBlank { "Holiday Member" } ?: "Holiday Member",
-                                        style = MaterialTheme.typography.titleMedium.copy(
-                                            fontWeight = FontWeight.ExtraBold,
-                                            color = Color.White
-                                        ),
-                                        maxLines = 1
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Icon(
-                                        imageVector = Icons.Default.CheckCircle,
-                                        contentDescription = "Verified Account",
-                                        tint = HolidayGold,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                }
-                                Text(
-                                    text = user.email ?: "Google Account Connected",
-                                    style = MaterialTheme.typography.bodySmall.copy(
-                                        color = Color.White.copy(alpha = 0.85f)
-                                    ),
-                                    maxLines = 1
-                                )
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = "Permanent Credit & Card Cloud Protection Active ✓",
-                                    style = MaterialTheme.typography.labelSmall.copy(
-                                        color = HolidayGold,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(14.dp))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Surface(
-                                shape = RoundedCornerShape(10.dp),
-                                color = Color.Black.copy(alpha = 0.25f),
-                                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f))
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(text = "🪙", fontSize = 13.sp)
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        text = "$credits Credits Synced",
-                                        color = Color.White,
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                            }
-
-                            OutlinedButton(
-                                onClick = {
-                                    AuthManager.signOut(context) {
-                                        Toast.makeText(context, "Signed out from Google", Toast.LENGTH_SHORT).show()
-                                    }
-                                },
-                                shape = RoundedCornerShape(12.dp),
-                                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.7f)),
-                                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
-                                modifier = Modifier.testTag("settings_sign_out_button")
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.ExitToApp,
-                                    contentDescription = "Sign Out",
-                                    modifier = Modifier.size(16.dp),
-                                    tint = Color.White
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(text = "Sign Out", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            }
-                        }
-                    }
-                } else {
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(52.dp)
-                                    .clip(CircleShape)
-                                    .background(HolidayGold.copy(alpha = 0.2f))
-                                    .border(2.dp, HolidayGold, CircleShape),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Shield,
-                                    contentDescription = "Shield",
-                                    tint = HolidayGold,
-                                    modifier = Modifier.size(32.dp)
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.width(14.dp))
-
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "Connect Google Account",
-                                    style = MaterialTheme.typography.titleMedium.copy(
-                                        fontWeight = FontWeight.ExtraBold,
-                                        color = Color.White
-                                    )
-                                )
-                                Text(
-                                    text = "Sign in to protect your 25 starter credits and back up all custom cards & wishes to the cloud.",
-                                    style = MaterialTheme.typography.bodySmall.copy(
-                                        color = Color.White.copy(alpha = 0.9f),
-                                        lineHeight = 16.sp
-                                    )
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(14.dp))
-
-                        Button(
-                            onClick = { showGoogleSignInDialog = true },
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = Color.White,
-                                contentColor = Color(0xFF8B0000)
-                            ),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(46.dp)
-                                .testTag("settings_google_sign_in_button")
-                        ) {
-                            Text(
-                                text = "Sign In with Google",
-                                fontWeight = FontWeight.ExtraBold,
-                                fontSize = 14.sp
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
         // Holiday Wishes Pro Membership Card
         Card(
             modifier = Modifier
@@ -779,14 +570,6 @@ fun SettingsScreen(
         }
         null -> {}
         else -> {}
-    }
-
-    if (showGoogleSignInDialog) {
-        GoogleSignInRedDialog(
-            actionTitle = "Google Account Sync",
-            actionDescription = "Connect your Google account to secure your 25 starter credits and back up all custom cards & wishes across devices and phone resets.",
-            onDismiss = { showGoogleSignInDialog = false }
-        )
     }
 }
 
