@@ -390,11 +390,6 @@ class UserFirestoreRepository(private val db: FirebaseFirestore) {
                 val claimSnap = transaction.get(claimedRef)
                 if (!userSnap.exists()) return@runTransaction false
 
-                val isPro = userSnap.getBoolean("isPro") ?: false
-                val isYearly = userSnap.getBoolean("isYearly") ?: false
-                if (isPro && isYearly) {
-                    return@runTransaction true
-                }
                 val currentCredits = (userSnap.getLong("credits") ?: 0L).coerceAtLeast(0L)
                 if (currentCredits >= amount) {
                     val newCredits = currentCredits - amount

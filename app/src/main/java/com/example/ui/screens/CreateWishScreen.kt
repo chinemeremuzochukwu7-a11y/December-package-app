@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -68,6 +69,7 @@ import com.example.model.WishGenerationResult
 import com.example.ui.theme.HolidayCrimson
 import com.example.ui.theme.HolidayGold
 import com.example.ui.viewmodel.HolidayViewModel
+import com.example.data.ads.AppOpenAdManager
 import com.example.data.subscription.SubscriptionManager
 import com.example.utils.ClipboardHelper
 import com.example.utils.ShareHelper
@@ -97,6 +99,7 @@ fun CreateWishScreen(
     val personalMessage by viewModel.personalMessage.collectAsStateWithLifecycle()
     val generatedWishes by viewModel.generatedWishes.collectAsStateWithLifecycle()
     val favoriteIds by viewModel.favoriteIds.collectAsStateWithLifecycle()
+    val context = LocalContext.current
     var selectedWishPhotoUri by remember { mutableStateOf<String?>(null) }
 
     val photoPickerLauncher = rememberLauncherForActivityResult(
@@ -338,10 +341,12 @@ fun CreateWishScreen(
                     } else {
                         Button(
                             onClick = {
+                                AppOpenAdManager.suppressNextForegroundAd()
                                 photoPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = HolidayPineGreen),
-                            shape = RoundedCornerShape(10.dp)
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.heightIn(min = 48.dp)
                         ) {
                             Text("Upload", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         }
@@ -419,7 +424,20 @@ fun CreateWishScreen(
                     photoUri = selectedWishPhotoUri,
                     isFavorite = favoriteIds.contains(result.id),
                     onToggleFavorite = { viewModel.toggleFavoriteGenerated(result) },
-                    onRegenerate = { viewModel.regenerateGeneratedWish(result.id) }
+                    onRegenerate = {
+                        viewModel.regenerateGeneratedWish(
+                            resultId = result.id,
+                            onComplete = {
+                                Toast.makeText(context, "Wish regenerated with AI! ✨", Toast.LENGTH_SHORT).show()
+                            },
+                            onInsufficientCredits = {
+                                Toast.makeText(context, "Need 15 AI credits to regenerate! Watch an ad or upgrade to Pro.", Toast.LENGTH_LONG).show()
+                            },
+                            onError = { err ->
+                                Toast.makeText(context, err, Toast.LENGTH_LONG).show()
+                            }
+                        )
+                    }
                 )
             }
         }
@@ -522,7 +540,7 @@ private fun GeneratedWishCard(
                     photoUri = photoUri,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(270.dp)
+                        .heightIn(min = 240.dp)
                 )
                 Spacer(modifier = Modifier.height(12.dp))
             } else {
@@ -589,12 +607,13 @@ private fun GeneratedWishCard(
                             message = result.wishText,
                             sender = "",
                             template = matchingTemplate,
-                            photoUri = photoUri
+                            photoUri = photoUri,
+                            skipAdCheck = true
                         )
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = HolidayCrimson),
                     shape = RoundedCornerShape(10.dp),
-                    modifier = Modifier.weight(1.3f).height(40.dp).testTag("share_card_with_photo_button")
+                    modifier = Modifier.weight(1.3f).height(48.dp).testTag("share_card_with_photo_button")
                 ) {
                     Icon(
                         imageVector = Icons.Default.Share,
@@ -634,7 +653,7 @@ private fun GeneratedWishCard(
                     },
                     shape = RoundedCornerShape(10.dp),
                     border = BorderStroke(1.dp, HolidayPineGreen),
-                    modifier = Modifier.weight(1f).height(40.dp)
+                    modifier = Modifier.weight(1f).height(48.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Download,
@@ -649,50 +668,56 @@ private fun GeneratedWishCard(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Secondary Actions Row: Schedule, Copy Text, Share Text Only
+            // Secondary Actions Row: Schedule, AI Regenerate (15 Cr), Copy Text, Share Text Only
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                OutlinedButton(
-                    onClick = { showScheduleDialog = true },
-                    shape = RoundedCornerShape(10.dp),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)),
-                    modifier = Modifier.height(34.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.AccessTime,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(14.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Schedule", fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedButton(
+                        onClick = { showScheduleDialog = true },
+                        shape = RoundedCornerShape(10.dp),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)),
+                        modifier = Modifier.height(48.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AccessTime,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Schedule", fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
 
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    IconButton(
-                        onClick = {
-                            onRegenerate()
-                            Toast.makeText(context, "Wish regenerated with AI! ✨", Toast.LENGTH_SHORT).show()
-                        },
-                        modifier = Modifier.size(34.dp).testTag("regenerate_generated_button_${result.id}")
+                    OutlinedButton(
+                        onClick = { onRegenerate() },
+                        shape = RoundedCornerShape(10.dp),
+                        border = BorderStroke(1.dp, HolidayGold),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            containerColor = HolidayGold.copy(alpha = 0.14f)
+                        ),
+                        modifier = Modifier.height(48.dp).testTag("regenerate_generated_button_${result.id}")
                     ) {
                         Icon(
                             imageVector = Icons.Default.AutoAwesome,
                             contentDescription = "Regenerate with AI",
-                            tint = HolidayGold,
-                            modifier = Modifier.size(18.dp)
+                            tint = Color(0xFF6B4E00),
+                            modifier = Modifier.size(14.dp)
                         )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("AI (15 🪙)", fontSize = 11.5.sp, fontWeight = FontWeight.Bold, color = Color(0xFF6B4E00))
                     }
+                }
 
+                Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                     IconButton(
                         onClick = {
                             val textToCopy = if (isProUser) result.wishText else "${result.wishText}\n\n✨ Made with Holiday Wishes 🎄"
                             ClipboardHelper.copyText(context, textToCopy)
                         },
-                        modifier = Modifier.size(34.dp).testTag("copy_generated_button")
+                        modifier = Modifier.size(48.dp).testTag("copy_generated_button")
                     ) {
                         Icon(
                             imageVector = Icons.Default.ContentCopy,
@@ -703,8 +728,8 @@ private fun GeneratedWishCard(
                     }
 
                     IconButton(
-                        onClick = { ShareHelper.shareWish(context, result.wishText, "Holiday Wish") },
-                        modifier = Modifier.size(34.dp).testTag("share_text_generated_button")
+                        onClick = { ShareHelper.shareWish(context, result.wishText, "Holiday Wish", skipAdCheck = true) },
+                        modifier = Modifier.size(48.dp).testTag("share_text_generated_button")
                     ) {
                         Icon(
                             imageVector = Icons.Default.Share,

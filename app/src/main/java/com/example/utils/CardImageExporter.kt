@@ -362,6 +362,7 @@ object CardImageExporter {
                     context.grantUriPermission(packageName, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 }
             } catch (ignored: Exception) {}
+            com.example.data.ads.AppOpenAdManager.suppressNextForegroundAd()
             context.startActivity(chooser)
         } else {
             Toast.makeText(context, "Could not prepare card for sharing", Toast.LENGTH_SHORT).show()

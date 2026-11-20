@@ -48,20 +48,37 @@ class AlarmScheduler(private val context: Context) {
         )
 
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                alarmManager.setExactAndAllowWhileIdle(
-                    AlarmManager.RTC_WAKEUP,
-                    targetCalendar.timeInMillis,
-                    pendingIntent
-                )
+            val canScheduleExact = Build.VERSION.SDK_INT < Build.VERSION_CODES.S || alarmManager.canScheduleExactAlarms()
+            if (canScheduleExact) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    alarmManager.setExactAndAllowWhileIdle(
+                        AlarmManager.RTC_WAKEUP,
+                        targetCalendar.timeInMillis,
+                        pendingIntent
+                    )
+                } else {
+                    alarmManager.setExact(
+                        AlarmManager.RTC_WAKEUP,
+                        targetCalendar.timeInMillis,
+                        pendingIntent
+                    )
+                }
             } else {
-                alarmManager.setExact(
-                    AlarmManager.RTC_WAKEUP,
-                    targetCalendar.timeInMillis,
-                    pendingIntent
-                )
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    alarmManager.setAndAllowWhileIdle(
+                        AlarmManager.RTC_WAKEUP,
+                        targetCalendar.timeInMillis,
+                        pendingIntent
+                    )
+                } else {
+                    alarmManager.set(
+                        AlarmManager.RTC_WAKEUP,
+                        targetCalendar.timeInMillis,
+                        pendingIntent
+                    )
+                }
             }
-            Log.d("AlarmScheduler", "Scheduled ${alarm.type} id=${alarm.id} for ${targetCalendar.time}")
+            Log.d("AlarmScheduler", "Scheduled ${alarm.type} id=${alarm.id} exact=$canScheduleExact for ${targetCalendar.time}")
         } catch (e: SecurityException) {
             Log.e("AlarmScheduler", "Exact alarm permission missing, falling back to set()", e)
             alarmManager.set(

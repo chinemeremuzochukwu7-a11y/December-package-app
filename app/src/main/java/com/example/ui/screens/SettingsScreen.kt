@@ -149,7 +149,7 @@ fun SettingsScreen(
                             text = if (isPro)
                                 "Entitlement: holiday_wishes_pro active"
                             else
-                                "Unlock VIP cards, unlimited AI, and ad-free experience",
+                                "Unlock VIP cards, monthly AI credits & ad-free experience",
                             style = MaterialTheme.typography.bodySmall.copy(
                                 color = Color.White.copy(alpha = 0.9f)
                             )
@@ -246,7 +246,7 @@ fun SettingsScreen(
                 SettingsClickableItem(
                     icon = Icons.Default.AutoAwesome,
                     title = "Pro Membership & Plans",
-                    subtitle = if (isPro) "Active (Holiday Wishes Pro)" else "Unlock Monthly ($9.99) or Yearly ($79 - Save 34%)",
+                    subtitle = if (isPro) "Active (Holiday Wishes Pro)" else "Starter ($2.90/mo), Plus ($5.90/mo) or Annual ($35/yr)",
                     onClick = onNavigateToPro,
                     testTag = "settings_plans_item"
                 )
@@ -427,7 +427,7 @@ fun SettingsScreen(
                 SettingsClickableItem(
                     icon = Icons.Default.Security,
                     title = "Privacy Policy",
-                    subtitle = "100% Offline, no personal data collected",
+                    subtitle = "Local storage, cloud credit protection, AI & ads",
                     onClick = { viewModel.openDialog(SettingsDialogType.PRIVACY_POLICY) },
                     testTag = "settings_privacy"
                 )
@@ -542,7 +542,7 @@ fun SettingsScreen(
                 title = { Text("Privacy Policy", fontWeight = FontWeight.Bold) },
                 text = {
                     Text(
-                        "Holiday Wishes is completely privacy-first:\n\n• 100% Offline Functionality: Your saved favorites and customized greeting cards are stored strictly on your local device via Room Database.\n• No external trackers, accounts, or analytics are used.\n• Sharing is processed directly through Android's native share sheet.\n• We do not collect, sell, or transmit any personal data."
+                        "Holiday Wishes respects your privacy and keeps data collection minimal:\n\n• Local Device Storage: Your favorites, customized cards, birthdays, expenses, meals, and alarms are stored locally on your device via Room Database.\n• Hardware Credit Protection: A pseudonymous device identifier is synced with Cloud Firestore so your AI credit balance and Pro entitlements are preserved even if you clear storage or reinstall—without requiring an account or password.\n• AI Generation: Prompts you submit to AI features are processed securely via Firebase AI Logic (Gemini API) with Firebase App Check.\n• Billing & Ads: Subscriptions are processed through Google Play Billing. Free users see Google AdMob banner and optional rewarded ads.\n• Sharing: Wishes and card images are shared directly via Android's native share sheet."
                     )
                 },
                 confirmButton = {

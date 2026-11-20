@@ -2,6 +2,7 @@ package com.example.data.repository
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.example.BuildConfig
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -11,52 +12,73 @@ data class PricingTier(
     val title: String,
     val priceDisplay: String,
     val priceNumeric: Double,
+    val creditsAllowance: Int,
     val badge: String?,
     val description: String,
     val features: List<String>
 )
 
 object PricingTiers {
-    val PRO_MONTHLY = PricingTier(
+    val STARTER_MONTHLY = PricingTier(
         id = "holiday_wishes_monthly",
-        title = "Holiday Pro Monthly",
-        priceDisplay = "$9.99 / mo",
-        priceNumeric = 9.99,
-        badge = "300 Credits Included",
-        description = "300 AI Credits included, full access to 1,000+ Pro cards & wishes, watermarks removed & ad-free.",
+        title = "Starter Monthly",
+        priceDisplay = "$2.90 / mo",
+        priceNumeric = 2.90,
+        creditsAllowance = 150,
+        badge = "150 Credits / Month",
+        description = "150 Gemini AI Credits/month, all 1,000+ Pro cards & wishes unlocked, zero watermarks & ad-free.",
         features = listOf(
-            "🪙 300 AI Credits included each month",
+            "🪙 150 AI Credits refreshed every month",
             "Unlock 1,000+ Pro Christmas, New Year & Season cards",
             "Unlock 1,000+ Pro Wishes across all categories",
-            "Remove all watermarks on cards & wishes",
-            "Full HD Card Download to Device Gallery",
-            "Ad-Free experience across the entire app",
-            "Cancel anytime in Google Play Store"
+            "Remove watermarks + Full HD Card Downloads",
+            "100% Ad-Free Experience Across App",
+            "Cancel anytime on Google Play"
         )
     )
 
-    val PRO_YEARLY = PricingTier(
-        id = "holiday_wishes_yearly",
-        title = "Holiday Pro Yearly",
-        priceDisplay = "$79.00 / yr",
-        priceNumeric = 79.00,
-        badge = "⭐ SAVE 34% • UNLIMITED",
-        description = "Best value! Just $6.58/mo billed annually. UNLIMITED AI Credits for the whole year!",
+    val PLUS_MONTHLY = PricingTier(
+        id = "holiday_wishes_plus_monthly",
+        title = "Plus Monthly",
+        priceDisplay = "$5.90 / mo",
+        priceNumeric = 5.90,
+        creditsAllowance = 400,
+        badge = "⭐ RECOMMENDED • 400 Credits",
+        description = "Best monthly value! 400 AI Credits/month for high-volume holiday greetings & AI cards.",
         features = listOf(
-            "✨ UNLIMITED AI Credits for 1 full year",
-            "Save 34% compared to monthly payments ($6.58/mo)",
-            "Unlock all 1,000+ Pro Cards (500+ Season, Christmas & New Year)",
-            "Unlock all 1,000+ Pro Wishes",
-            "Remove all watermarks on cards & wishes",
-            "Full HD Card Download & Auto-Schedule delivery",
-            "Exclusive VIP Gold Foil effects & custom badges",
-            "Ad-Free for the full year"
+            "🪙 400 AI Credits refreshed every month",
+            "Unlock all 1,000+ Pro Cards & Pro Wishes",
+            "Remove watermarks + 4 HD Export Sizes",
+            "Ad-Free Experience + Priority AI Creation",
+            "Cancel anytime on Google Play"
         )
     )
 
-    // Compatibility aliases
-    val PRO_LIFETIME = PRO_MONTHLY
-    val ULTIMATE_VIP = PRO_YEARLY
+    val ANNUAL_VIP = PricingTier(
+        id = "holiday_wishes_yearly",
+        title = "Annual VIP Pass",
+        priceDisplay = "$35.00 / yr",
+        priceNumeric = 35.00,
+        creditsAllowance = 350,
+        badge = "👑 SAVE 51% • 4,200 Credits/Yr",
+        description = "Just ~$2.92/mo billed annually. 350 fresh AI Credits every month for 12 months (4,200/yr)!",
+        features = listOf(
+            "✨ 350 AI Credits/mo every month (4,200/year)",
+            "Save 51% vs Plus Monthly (~$2.92/mo)",
+            "Unlock all 1,000+ Pro Cards (Season, Xmas, New Year)",
+            "Unlock all 1,000+ Pro Wishes & Zero Watermarks",
+            "Ad-Free for 1 full year + VIP Gold Themes"
+        )
+    )
+
+    val ALL_TIERS = listOf(STARTER_MONTHLY, PLUS_MONTHLY, ANNUAL_VIP)
+
+    // Compatibility aliases mapped strictly to the 3 approved plans
+    val PRO_MONTHLY = STARTER_MONTHLY
+    val PRO_PLUS = PLUS_MONTHLY
+    val PRO_YEARLY = ANNUAL_VIP
+    val PRO_LIFETIME = STARTER_MONTHLY
+    val ULTIMATE_VIP = ANNUAL_VIP
 }
 
 class MonetizationManager(context: Context) {
@@ -102,11 +124,16 @@ class MonetizationManager(context: Context) {
     private val _rewardedAdWatches = MutableStateFlow(prefs.getInt(KEY_REWARDED_WATCHES, 0))
     val rewardedAdWatches: StateFlow<Int> = _rewardedAdWatches.asStateFlow()
 
-    /**
-     * Checks if a card is unlocked.
-     * If unlocked via rewarded ad, it remains unlocked only for the current day.
-     * When the day ends, it automatically locks again!
-     */
+    fun syncProStatus(isPro: Boolean, isVip: Boolean) {
+        _isProUser.value = isPro
+        _isVipUser.value = isVip
+        prefs.edit().apply {
+            putBoolean(KEY_IS_PRO, isPro)
+            putBoolean(KEY_IS_VIP, isVip)
+            apply()
+        }
+    }
+
     fun isCardUnlocked(cardId: String, isTemplatePro: Boolean): Boolean {
         if (!isTemplatePro) return true
         if (_isProUser.value || _isVipUser.value || com.example.data.subscription.SubscriptionManager.isPro.value) return true
@@ -117,11 +144,6 @@ class MonetizationManager(context: Context) {
         return todayUnlocked.contains(cardId)
     }
 
-    /**
-     * Checks if a wish is unlocked.
-     * If unlocked via rewarded ad, it remains unlocked only for the current day.
-     * When the day ends, it automatically locks again!
-     */
     fun isWishUnlocked(wishId: String, isProWish: Boolean): Boolean {
         if (!isProWish) return true
         if (_isProUser.value || _isVipUser.value || com.example.data.subscription.SubscriptionManager.isPro.value) return true
@@ -132,16 +154,11 @@ class MonetizationManager(context: Context) {
         return todayUnlocked.contains(wishId)
     }
 
-    /**
-     * Unlocks a single Pro wish after the user watches a rewarded ad.
-     * The unlock is tied to today's date so it automatically locks again when the day ends!
-     */
     fun unlockWishViaRewardedAd(wishId: String) {
         val today = getTodayDateString()
         val currentSet = loadTodayUnlockedWishes().toMutableSet()
         currentSet.add(wishId)
         val newWatches = _rewardedAdWatches.value + 1
-
         val serializedSet = currentSet.map { "$it:$today" }.toSet()
 
         prefs.edit().apply {
@@ -155,36 +172,24 @@ class MonetizationManager(context: Context) {
     }
 
     /**
-     * Simulates or executes Google Play Billing purchase.
-     * When integrated with the Play Billing Client, this is called upon BillingResult.OK.
+     * Only invoked in debug builds when testing without Play Billing, or synced from SubscriptionManager.
+     * Release builds must purchase exclusively through SubscriptionManager (Google Play BillingClient).
      */
     fun completePurchase(tierId: String): Boolean {
-        val isVip = tierId == PricingTiers.ULTIMATE_VIP.id
-        prefs.edit().apply {
-            putBoolean(KEY_IS_PRO, true)
-            if (isVip) {
-                putBoolean(KEY_IS_VIP, true)
-            }
-            apply()
+        if (!BuildConfig.DEBUG) {
+            return false
         }
-        _isProUser.value = true
-        if (isVip) {
-            _isVipUser.value = true
-        }
+        val isVip = tierId == PricingTiers.ANNUAL_VIP.id || tierId == PricingTiers.PLUS_MONTHLY.id
+        syncProStatus(isPro = true, isVip = isVip)
         com.example.data.subscription.SubscriptionManager.setProDirect(true)
         return true
     }
 
-    /**
-     * Unlocks a single Pro template after the user watches a rewarded video ad.
-     * The unlock is tied to today's date so it automatically locks again when the day ends!
-     */
     fun unlockCardViaRewardedAd(cardId: String) {
         val today = getTodayDateString()
         val currentSet = loadTodayUnlockedCards().toMutableSet()
         currentSet.add(cardId)
         val newWatches = _rewardedAdWatches.value + 1
-
         val serializedSet = currentSet.map { "$it:$today" }.toSet()
 
         prefs.edit().apply {
@@ -197,21 +202,14 @@ class MonetizationManager(context: Context) {
         _rewardedAdWatches.value = newWatches
     }
 
-    /**
-     * Restores existing purchases for user.
-     */
     fun restorePurchases(): Boolean {
-        // Reads from Google Play Billing or persistent preferences
-        val hasPro = prefs.getBoolean(KEY_IS_PRO, false)
+        val hasPro = prefs.getBoolean(KEY_IS_PRO, false) || com.example.data.subscription.SubscriptionManager.isPro.value
         val hasVip = prefs.getBoolean(KEY_IS_VIP, false)
         _isProUser.value = hasPro
         _isVipUser.value = hasVip
         return hasPro || hasVip
     }
 
-    /**
-     * Reset / Debug helper for testing monetization flows in emulator.
-     */
     fun resetPurchasesForTesting() {
         prefs.edit().clear().apply()
         _isProUser.value = false

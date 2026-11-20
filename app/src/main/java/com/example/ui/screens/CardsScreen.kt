@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import android.app.Activity
 import android.content.Context
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
@@ -14,10 +15,12 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
@@ -39,6 +42,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
@@ -48,6 +52,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -61,12 +66,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.data.ads.AdManager
+import com.example.data.ads.AppOpenAdManager
 import com.example.data.repository.CardTemplatesRepository
 import com.example.model.CardOccasion
 import com.example.model.CardTemplate
 import com.example.ui.components.CardPreviewView
 import com.example.ui.components.ProUpgradeDialog
-import com.example.ui.components.RewardedAdDialog
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.OutlinedTextField
@@ -92,11 +98,13 @@ fun CardsScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val activity = context as? Activity
     val savedCards by viewModel.savedCards.collectAsStateWithLifecycle()
     val isProUser by viewModel.isProUser.collectAsStateWithLifecycle()
     val isVipUser by viewModel.isVipUser.collectAsStateWithLifecycle()
     val unlockedCardIds by viewModel.unlockedCardIds.collectAsStateWithLifecycle()
     val customTemplateMessages by viewModel.customCardTemplateMessages.collectAsStateWithLifecycle()
+    val cardAiIsGenerating by viewModel.cardAiIsGenerating.collectAsStateWithLifecycle()
 
     var selectedFilter by remember { mutableStateOf(CardFilterType.ALL) }
     var showProUpgradeDialog by remember { mutableStateOf(false) }
@@ -104,173 +112,36 @@ fun CardsScreen(
     var proDialogTargetTemplate by remember { mutableStateOf<CardTemplate?>(null) }
     var rewardedAdTemplate by remember { mutableStateOf<CardTemplate?>(null) }
 
-    val filteredTemplates = when (selectedFilter) {
-        CardFilterType.ALL -> CardTemplatesRepository.getAllTemplates()
-        CardFilterType.SEASON -> CardTemplatesRepository.getSeasonTemplates()
-        CardFilterType.CHRISTMAS -> CardTemplatesRepository.getChristmasTemplates()
-        CardFilterType.NEW_YEAR -> CardTemplatesRepository.getNewYearTemplates()
-        CardFilterType.PRO_ONLY -> CardTemplatesRepository.getProTemplates()
-        CardFilterType.FREE_ONLY -> CardTemplatesRepository.getFreeTemplates()
+    val allTemplates = remember { CardTemplatesRepository.getAllTemplates() }
+    val seasonTemplates = remember { CardTemplatesRepository.getSeasonTemplates() }
+    val christmasTemplates = remember { CardTemplatesRepository.getChristmasTemplates() }
+    val newYearTemplates = remember { CardTemplatesRepository.getNewYearTemplates() }
+    val proTemplates = remember { CardTemplatesRepository.getProTemplates() }
+    val freeTemplates = remember { CardTemplatesRepository.getFreeTemplates() }
+
+    val filteredTemplates = remember(selectedFilter) {
+        when (selectedFilter) {
+            CardFilterType.ALL -> allTemplates
+            CardFilterType.SEASON -> seasonTemplates
+            CardFilterType.CHRISTMAS -> christmasTemplates
+            CardFilterType.NEW_YEAR -> newYearTemplates
+            CardFilterType.PRO_ONLY -> proTemplates
+            CardFilterType.FREE_ONLY -> freeTemplates
+        }
     }
+
+    val amberTextColor = Color(0xFF6B4E00)
 
     Column(
         modifier = modifier
             .fillMaxSize()
             .testTag("cards_screen")
     ) {
-        // Pro Upgrade Banner (if not already Pro or VIP)
-        if (!isProUser && !isVipUser) {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 6.dp)
-                    .clickable {
-                        proDialogTargetTemplate = null
-                        showProUpgradeDialog = true
-                    }
-                    .testTag("pro_upgrade_banner"),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = HolidayGold.copy(alpha = 0.15f)
-                ),
-                border = BorderStroke(1.5.dp, HolidayGold)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 14.dp, vertical = 10.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(
-                        modifier = Modifier.weight(1f),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(text = "👑", fontSize = 22.sp)
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Column {
-                            Text(
-                                text = "Holiday Wishes Pro & VIP Pass",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                text = "Unlock 1,000+ luxury cards with Pro ($9.99/mo) or daily rewarded ads",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontSize = 11.5.sp
-                            )
-                        }
-                    }
-
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = HolidayCrimson
-                    ) {
-                        Text(
-                            text = "UNLOCK",
-                            fontWeight = FontWeight.ExtraBold,
-                            color = Color.White,
-                            fontSize = 11.sp,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                        )
-                    }
-                }
-            }
-        } else {
-            // Already Pro / VIP Badge
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 4.dp),
-                shape = RoundedCornerShape(12.dp),
-                color = HolidayGold.copy(alpha = 0.2f),
-                border = BorderStroke(1.dp, HolidayGold)
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(text = if (isVipUser) "⭐" else "👑", fontSize = 16.sp)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = if (isVipUser) "Ultimate VIP Active — All Luxury Cards & Unlimited AI Unlocked" else "Holiday Wishes Pro Active — All Templates Unlocked",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-            }
-        }
-
-        // AI Card Creation Banner
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 4.dp)
-                .clickable {
-                    showAiCardCreationDialog = true
-                }
-                .testTag("ai_create_card_banner"),
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = HolidayCrimson.copy(alpha = 0.08f)
-            ),
-            border = BorderStroke(1.2.dp, HolidayCrimson.copy(alpha = 0.5f))
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 10.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    modifier = Modifier.weight(1f),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.AutoAwesome,
-                        contentDescription = null,
-                        tint = HolidayCrimson,
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Column {
-                        Text(
-                            text = "Create Card with AI ✨",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = HolidayCrimson
-                        )
-                        Text(
-                            text = "Let AI design your card, personalized greeting & theme",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-                Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = HolidayCrimson
-                ) {
-                    Text(
-                        text = "CREATE ✨",
-                        fontWeight = FontWeight.ExtraBold,
-                        color = Color.White,
-                        fontSize = 11.sp,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                    )
-                }
-            }
-        }
-
-        // Action Bar: Category Filter Chips & "My Cards" shortcut
+        // Action Bar: Category Filter Chips & "My Cards" shortcut pinned cleanly at top
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 4.dp),
+                .padding(horizontal = 16.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -281,37 +152,37 @@ fun CardsScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 CategoryPill(
-                    text = "All (${CardTemplatesRepository.getAllTemplates().size})",
+                    text = "All (${allTemplates.size})",
                     isSelected = selectedFilter == CardFilterType.ALL,
                     onClick = { selectedFilter = CardFilterType.ALL },
                     modifier = Modifier.testTag("filter_all_cards")
                 )
                 CategoryPill(
-                    text = "❄️ Season (${CardTemplatesRepository.getSeasonTemplates().size})",
+                    text = "❄️ Season (${seasonTemplates.size})",
                     isSelected = selectedFilter == CardFilterType.SEASON,
                     onClick = { selectedFilter = CardFilterType.SEASON },
                     modifier = Modifier.testTag("filter_season_cards")
                 )
                 CategoryPill(
-                    text = "🎄 Christmas (${CardTemplatesRepository.getChristmasTemplates().size})",
+                    text = "🎄 Christmas (${christmasTemplates.size})",
                     isSelected = selectedFilter == CardFilterType.CHRISTMAS,
                     onClick = { selectedFilter = CardFilterType.CHRISTMAS },
                     modifier = Modifier.testTag("filter_christmas_cards")
                 )
                 CategoryPill(
-                    text = "🎉 New Year (${CardTemplatesRepository.getNewYearTemplates().size})",
+                    text = "🎉 New Year (${newYearTemplates.size})",
                     isSelected = selectedFilter == CardFilterType.NEW_YEAR,
                     onClick = { selectedFilter = CardFilterType.NEW_YEAR },
                     modifier = Modifier.testTag("filter_newyear_cards")
                 )
                 CategoryPill(
-                    text = "👑 Pro (${CardTemplatesRepository.getProTemplates().size})",
+                    text = "👑 Pro (${proTemplates.size})",
                     isSelected = selectedFilter == CardFilterType.PRO_ONLY,
                     onClick = { selectedFilter = CardFilterType.PRO_ONLY },
                     modifier = Modifier.testTag("filter_pro_cards")
                 )
                 CategoryPill(
-                    text = "✨ Free (${CardTemplatesRepository.getFreeTemplates().size})",
+                    text = "✨ Free (${freeTemplates.size})",
                     isSelected = selectedFilter == CardFilterType.FREE_ONLY,
                     onClick = { selectedFilter = CardFilterType.FREE_ONLY },
                     modifier = Modifier.testTag("filter_free_cards")
@@ -320,22 +191,24 @@ fun CardsScreen(
 
             Spacer(modifier = Modifier.width(8.dp))
 
-            // My Cards Badge Button
+            // My Cards Badge Button (48dp height for touch accessibility + readable bronze ink)
             Surface(
                 onClick = onNavigateToMyCards,
                 shape = RoundedCornerShape(14.dp),
-                color = HolidayGold.copy(alpha = 0.2f),
-                border = BorderStroke(1.dp, HolidayGold),
-                modifier = Modifier.testTag("my_cards_nav_button")
+                color = HolidayGold.copy(alpha = 0.22f),
+                border = BorderStroke(1.2.dp, HolidayGold),
+                modifier = Modifier
+                    .heightIn(min = 48.dp)
+                    .testTag("my_cards_nav_button")
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
                         imageVector = Icons.Default.Bookmark,
                         contentDescription = "My Cards",
-                        tint = HolidayGold,
+                        tint = amberTextColor,
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
@@ -343,7 +216,7 @@ fun CardsScreen(
                         text = "My (${savedCards.size})",
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold,
-                        color = HolidayGold
+                        color = amberTextColor
                     )
                 }
             }
@@ -353,10 +226,155 @@ fun CardsScreen(
         LazyVerticalGrid(
             columns = GridCells.Adaptive(minSize = 300.dp),
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 96.dp),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 96.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp),
-            verticalArrangement = Arrangement.spacedBy(18.dp)
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // Scrollable Studio Banners header so cards get maximum viewport height while browsing
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (!isProUser && !isVipUser) {
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    proDialogTargetTemplate = null
+                                    showProUpgradeDialog = true
+                                }
+                                .testTag("pro_upgrade_banner"),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = HolidayGold.copy(alpha = 0.16f)
+                            ),
+                            border = BorderStroke(1.5.dp, HolidayGold)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    modifier = Modifier.weight(1f),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(text = "👑", fontSize = 22.sp)
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Column {
+                                        Text(
+                                            text = "Holiday Wishes Pro & VIP Pass",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Text(
+                                            text = "Unlock 1,000+ luxury cards with Pro (from $2.90/mo) or watch an ad per share",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            fontSize = 11.5.sp
+                                        )
+                                    }
+                                }
+
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = HolidayCrimson
+                                ) {
+                                    Text(
+                                        text = "UNLOCK",
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = Color.White,
+                                        fontSize = 11.sp,
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                    )
+                                }
+                            }
+                        }
+                    } else {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            color = HolidayGold.copy(alpha = 0.2f),
+                            border = BorderStroke(1.dp, HolidayGold)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(text = if (isVipUser) "⭐" else "👑", fontSize = 16.sp)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = if (isVipUser) "VIP Pro Active — All 1,000+ Luxury Cards & Monthly Credits Unlocked" else "Holiday Wishes Pro Active — All Templates Unlocked",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+                    }
+
+                    // AI Card Creation Banner
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { showAiCardCreationDialog = true }
+                            .testTag("ai_create_card_banner"),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = HolidayCrimson.copy(alpha = 0.08f)
+                        ),
+                        border = BorderStroke(1.2.dp, HolidayCrimson.copy(alpha = 0.5f))
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp, vertical = 10.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                modifier = Modifier.weight(1f),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.AutoAwesome,
+                                    contentDescription = null,
+                                    tint = HolidayCrimson,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column {
+                                    Text(
+                                        text = "Create Card with AI ✨ (25 Credits)",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = HolidayCrimson
+                                    )
+                                    Text(
+                                        text = "Let AI design your custom card, personal photo frame & message",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = HolidayCrimson
+                            ) {
+                                Text(
+                                    text = "CREATE ✨",
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = Color.White,
+                                    fontSize = 11.sp,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
             items(filteredTemplates, key = { it.id }) { template ->
                 val isUnlocked = viewModel.isCardUnlocked(template)
                 val customMsg = customTemplateMessages[template.id]
@@ -379,7 +397,8 @@ fun CardsScreen(
                                 recipient = "",
                                 message = customMsg ?: template.defaultMessage,
                                 sender = "",
-                                template = template
+                                template = template,
+                                skipAdCheck = true
                             )
                         }
                     }
@@ -388,26 +407,40 @@ fun CardsScreen(
         }
     }
 
-    // Pro Upgrade Dialog ($5 / $10 purchase or Watch Ad)
+    // Pro Upgrade Dialog (Play Billing or Real Rewarded Ad)
     if (showProUpgradeDialog) {
         ProUpgradeDialog(
             targetTemplate = proDialogTargetTemplate,
             onPurchaseTier = { tierId ->
-                viewModel.purchaseProTier(tierId)
-                Toast.makeText(context, "Welcome to Holiday Wishes Pro! Enjoy all luxury cards! 🎉", Toast.LENGTH_LONG).show()
-                showProUpgradeDialog = false
+                viewModel.purchaseProTier(
+                    activity = activity,
+                    tierId = tierId,
+                    onSuccess = {
+                        Toast.makeText(context, "Welcome to Holiday Wishes Pro! Enjoy all luxury cards! 🎉", Toast.LENGTH_LONG).show()
+                        showProUpgradeDialog = false
+                    },
+                    onError = { err ->
+                        Toast.makeText(context, err, Toast.LENGTH_LONG).show()
+                    }
+                )
             },
             onWatchRewardedAd = {
-                rewardedAdTemplate = proDialogTargetTemplate
+                val target = proDialogTargetTemplate
                 showProUpgradeDialog = false
+                if (target != null) {
+                    rewardedAdTemplate = target
+                } else if (activity != null) {
+                    AdManager.showRewardedAd(activity)
+                }
             },
             onRestorePurchases = {
-                val restored = viewModel.restorePurchases()
-                Toast.makeText(
-                    context,
-                    if (restored) "Purchases successfully restored! Welcome back! 🎉" else "No existing Google Play purchases found.",
-                    Toast.LENGTH_SHORT
-                ).show()
+                viewModel.restorePurchases { restored ->
+                    Toast.makeText(
+                        context,
+                        if (restored) "Purchases successfully restored! Welcome back! 🎉" else "No existing Google Play purchases found.",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
             },
             onDismiss = {
                 showProUpgradeDialog = false
@@ -416,29 +449,43 @@ fun CardsScreen(
         )
     }
 
-    // Rewarded Ad Dialog (AdMob simulation with real unlock grant)
-    if (rewardedAdTemplate != null) {
-        val target = rewardedAdTemplate!!
+    // Real Google AdMob Rewarded Ad execution when unlocking a Pro card for sharing
+    LaunchedEffect(rewardedAdTemplate) {
+        val target = rewardedAdTemplate ?: return@LaunchedEffect
         val customMsg = customTemplateMessages[target.id]
-        RewardedAdDialog(
-            template = target,
-            onRewardEarned = {
-                viewModel.unlockCardViaRewardedAd(target.id)
-                Toast.makeText(context, "🎉 ${target.title} unlocked! Sharing now...", Toast.LENGTH_SHORT).show()
-                ShareHelper.shareCard(
-                    context = context,
-                    title = target.title,
-                    recipient = "",
-                    message = customMsg ?: target.defaultMessage,
-                    sender = "",
-                    template = target
-                )
-                rewardedAdTemplate = null
-            },
-            onDismiss = {
-                rewardedAdTemplate = null
-            }
-        )
+        if (activity != null) {
+            var rewardEarned = false
+            AdManager.showRewardedAd(
+                activity = activity,
+                onRewardEarned = {
+                    rewardEarned = true
+                    viewModel.unlockCardViaRewardedAd(target.id)
+                },
+                onDismiss = {
+                    rewardedAdTemplate = null
+                    if (rewardEarned) {
+                        Toast.makeText(context, "🎉 ${target.title} unlocked! Sharing now...", Toast.LENGTH_SHORT).show()
+                        ShareHelper.shareCard(
+                            context = context,
+                            title = target.title,
+                            recipient = "",
+                            message = customMsg ?: target.defaultMessage,
+                            sender = "",
+                            template = target,
+                            skipAdCheck = true
+                        )
+                    } else {
+                        Toast.makeText(context, "Watch the full ad to unlock and share this Pro card.", Toast.LENGTH_SHORT).show()
+                    }
+                },
+                onFailed = { err ->
+                    Toast.makeText(context, err, Toast.LENGTH_SHORT).show()
+                    rewardedAdTemplate = null
+                }
+            )
+        } else {
+            rewardedAdTemplate = null
+        }
     }
 
     var showAiCreationCreditDialog by remember { mutableStateOf(false) }
@@ -446,31 +493,35 @@ fun CardsScreen(
     // AI Card Creator Dialog
     if (showAiCardCreationDialog) {
         CreateCardWithAiDialog(
-            onDismiss = { showAiCardCreationDialog = false },
+            isGenerating = cardAiIsGenerating,
+            onDismiss = { if (!cardAiIsGenerating) showAiCardCreationDialog = false },
             onCreateCard = { occasion, recipient, sender, tone, themeStyle, length, prompt, photoUri ->
-                val cost = com.example.data.subscription.SubscriptionManager.CARD_CREATION_CREDIT_COST
-                if (!com.example.data.subscription.SubscriptionManager.hasEnoughCredits(cost)) {
-                    showAiCreationCreditDialog = true
-                } else {
-                    val deducted = com.example.data.subscription.SubscriptionManager.useCredits(cost)
-                    if (deducted) {
+                viewModel.createCardWithAi(
+                    occasion = occasion,
+                    recipientName = recipient,
+                    senderName = sender,
+                    tone = tone,
+                    themeStyle = themeStyle,
+                    length = length,
+                    customPrompt = prompt,
+                    photoUri = photoUri,
+                    onSuccess = { template ->
                         showAiCardCreationDialog = false
-                        Toast.makeText(context, "✨ 25 credits used for AI card creation! (Balance: ${com.example.data.subscription.SubscriptionManager.credits.value})", Toast.LENGTH_SHORT).show()
-                        val template = viewModel.createCardWithAi(
-                            occasion = occasion,
-                            recipientName = recipient,
-                            senderName = sender,
-                            tone = tone,
-                            themeStyle = themeStyle,
-                            length = length,
-                            customPrompt = prompt,
-                            photoUri = photoUri
-                        )
+                        Toast.makeText(
+                            context,
+                            "✨ 25 credits used for AI card creation! (Balance: ${com.example.data.subscription.SubscriptionManager.credits.value})",
+                            Toast.LENGTH_SHORT
+                        ).show()
                         onNavigateToCustomize(template)
-                    } else {
+                    },
+                    onInsufficientCredits = {
+                        showAiCardCreationDialog = false
                         showAiCreationCreditDialog = true
+                    },
+                    onError = { err ->
+                        Toast.makeText(context, err, Toast.LENGTH_LONG).show()
                     }
-                }
+                )
             }
         )
     }
@@ -484,7 +535,7 @@ fun CardsScreen(
             },
             text = {
                 Text(
-                    "Creating a card with AI costs 25 credits. Your current balance is $currentCredits credits.\n\nWatch a short rewarded ad to earn credits, or upgrade to Pro for unlimited card creation!"
+                    "Creating a card with AI costs 25 credits. Your current balance is $currentCredits credits.\n\nWatch a short rewarded ad to earn credits, or upgrade to Pro (from $2.90/mo) for generous monthly AI credits!"
                 )
             },
             confirmButton = {
@@ -599,6 +650,7 @@ private fun GridCardTemplateItem(
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier
                         .weight(1.2f)
+                        .heightIn(min = 48.dp)
                         .testTag("customize_button_${template.id}")
                 ) {
                     Icon(
@@ -621,10 +673,11 @@ private fun GridCardTemplateItem(
                     shape = RoundedCornerShape(12.dp),
                     border = BorderStroke(1.2.dp, if (template.isPro && !isUnlocked) HolidayGold else HolidayCrimson),
                     colors = ButtonDefaults.outlinedButtonColors(
-                        containerColor = if (template.isPro && !isUnlocked) HolidayGold.copy(alpha = 0.12f) else Color.Transparent
+                        containerColor = if (template.isPro && !isUnlocked) HolidayGold.copy(alpha = 0.14f) else Color.Transparent
                     ),
                     modifier = Modifier
                         .weight(1f)
+                        .heightIn(min = 48.dp)
                         .testTag("share_card_button_${template.id}")
                 ) {
                     Icon(
@@ -635,10 +688,11 @@ private fun GridCardTemplateItem(
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = if (template.isPro && !isUnlocked) "Share 🎁" else "Share",
+                        text = if (template.isPro && !isUnlocked) "Unlock & Share" else "Share",
                         color = if (template.isPro && !isUnlocked) Color(0xFF6B4E00) else HolidayCrimson,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 13.sp
+                        fontSize = 12.5.sp,
+                        maxLines = 1
                     )
                 }
             }
@@ -648,6 +702,7 @@ private fun GridCardTemplateItem(
 
 @Composable
 fun CreateCardWithAiDialog(
+    isGenerating: Boolean = false,
     onDismiss: () -> Unit,
     onCreateCard: (
         occasion: CardOccasion,
@@ -887,6 +942,7 @@ fun CreateCardWithAiDialog(
                 ) {
                     OutlinedButton(
                         onClick = {
+                            AppOpenAdManager.suppressNextForegroundAd()
                             photoPickerLauncher.launch(
                                 PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
                             )
@@ -929,19 +985,29 @@ fun CreateCardWithAiDialog(
             Button(
                 onClick = {
                     onCreateCard(occasion, recipientName, senderName, tone, themeStyle, length, customPrompt, selectedPhotoUri)
-                    onDismiss()
                 },
+                enabled = !isGenerating,
                 colors = ButtonDefaults.buttonColors(containerColor = HolidayCrimson),
                 shape = RoundedCornerShape(10.dp),
                 modifier = Modifier.testTag("submit_create_card_with_ai")
             ) {
-                Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(16.dp))
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("Generate Card (25 Credits) ✨", fontWeight = FontWeight.Bold)
+                if (isGenerating) {
+                    CircularProgressIndicator(
+                        color = Color.White,
+                        strokeWidth = 2.dp,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Creating...", fontWeight = FontWeight.Bold)
+                } else {
+                    Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Generate Card (25 Credits) ✨", fontWeight = FontWeight.Bold)
+                }
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            TextButton(onClick = onDismiss, enabled = !isGenerating) {
                 Text("Cancel")
             }
         }

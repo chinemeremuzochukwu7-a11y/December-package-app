@@ -166,6 +166,34 @@ class HolidayRepositoryRuleTest : FirestoreEmulatorTestBase() {
     }
   }
 
+  @Test
+  fun proSubscriber_deductCredits_deductsFromCloudLedger() = runBlocking {
+    val deviceId = uniqueDeviceId("pro_deduct")
+    val userRepo = UserFirestoreRepository(firestore)
+    withTimeout(DEFAULT_TIMEOUT_MS) {
+      userRepo.ensureUserInitialized(deviceId)
+      userRepo.updateProStatus(
+        userId = deviceId,
+        isPro = true,
+        isYearly = true,
+        credits = 350L,
+        lastResetMonth = "2026-12"
+      )
+    }
+
+    val deducted = withTimeout(DEFAULT_TIMEOUT_MS) {
+      userRepo.deductCredits(deviceId, 25)
+    }
+    assertTrue(deducted)
+
+    val updated = withTimeout(DEFAULT_TIMEOUT_MS) {
+      userRepo.ensureUserInitialized(deviceId)
+    }
+    assertTrue(updated.isPro)
+    assertTrue(updated.isYearly)
+    assertEquals(325L, updated.credits)
+  }
+
   private companion object {
     const val DEFAULT_TIMEOUT_MS = 6000L
     const val FLOW_TIMEOUT_MS = 4000L

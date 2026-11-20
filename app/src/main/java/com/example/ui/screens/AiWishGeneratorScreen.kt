@@ -136,33 +136,12 @@ fun AiWishGeneratorScreen(
 
     val onPerformGenerateWish: () -> Unit = {
         val calculatedCost = wishLength.creditCost
-        if (isPro) {
-            viewModel.generateAiWish()
+        if (!SubscriptionManager.hasEnoughCredits(calculatedCost)) {
+            showCreditDialog = true
+        } else if (SubscriptionManager.reserveCredits(calculatedCost)) {
+            viewModel.generateAiWish(deductedCost = calculatedCost)
         } else {
-            if (credits < calculatedCost) {
-                showCreditDialog = true
-            } else {
-                // Free user before start creating must watch rewarded ads
-                if (activity != null) {
-                    AdManager.showRewardedAd(
-                        activity = activity,
-                        onRewardEarned = { /* +1 credit earned */ },
-                        onDismiss = {
-                            if (SubscriptionManager.useCredits(calculatedCost)) {
-                                viewModel.generateAiWish()
-                            } else {
-                                showCreditDialog = true
-                            }
-                        }
-                    )
-                } else {
-                    if (SubscriptionManager.useCredits(calculatedCost)) {
-                        viewModel.generateAiWish()
-                    } else {
-                        showCreditDialog = true
-                    }
-                }
-            }
+            showCreditDialog = true
         }
     }
 
@@ -181,11 +160,11 @@ fun AiWishGeneratorScreen(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        "Creating a ${wishLength.displayName} wish (${wishLength.wordRange}) requires $calculatedCost credits. You currently have $credits credits in Firestore.",
+                        "Creating a ${wishLength.displayName} wish (${wishLength.wordRange}) requires $calculatedCost credits. Your current balance is $credits credits.",
                         style = MaterialTheme.typography.bodyMedium
                     )
                     Text(
-                        "Upgrade to Holiday Wishes Pro for unlimited instant AI generation with zero credit deductions, or watch a rewarded video to earn credits!",
+                        "Upgrade to Holiday Wishes Pro (from $2.90/mo) for 150 to 400 monthly AI credits & ad-free access, or watch a rewarded video to earn +1 credit!",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -254,8 +233,10 @@ fun AiWishGeneratorScreen(
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
                     text = if (isPro) {
-                        if (credits >= 99999) "PRO Unlimited AI Wishes (Yearly)" else "Pro Active • $credits Credits ($9.99/mo)"
-                    } else "Cost: ${wishLength.creditCost} Credits (${wishLength.wordRange}) • Balance: $credits",
+                        "Pro Active • Cost: ${wishLength.creditCost} Credits • Balance: $credits"
+                    } else {
+                        "Cost: ${wishLength.creditCost} Credits (${wishLength.wordRange}) • Balance: $credits"
+                    },
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface,
@@ -356,21 +337,14 @@ fun AiWishGeneratorScreen(
                 onSaveWish = { text, occ -> viewModel.saveAiWishToFavorites(text, occ) },
                 onCreateCard = { text, name ->
                     val cost = SubscriptionManager.CARD_CREATION_CREDIT_COST
-                    if (isPro) {
+                    if (!SubscriptionManager.hasEnoughCredits(cost)) {
+                        showCreditDialog = true
+                    } else if (SubscriptionManager.useCredits(cost)) {
+                        Toast.makeText(context, "✨ 25 credits used for AI card creation! (Balance: ${SubscriptionManager.credits.value})", Toast.LENGTH_SHORT).show()
                         viewModel.prepareCardFromAiWish(text, name)
                         onNavigateToCreateCard()
                     } else {
-                        if (!SubscriptionManager.hasEnoughCredits(cost)) {
-                            showCreditDialog = true
-                        } else {
-                            if (SubscriptionManager.useCredits(cost)) {
-                                Toast.makeText(context, "✨ 25 credits used for AI card creation! (Balance: ${SubscriptionManager.credits.value})", Toast.LENGTH_SHORT).show()
-                                viewModel.prepareCardFromAiWish(text, name)
-                                onNavigateToCreateCard()
-                            } else {
-                                showCreditDialog = true
-                            }
-                        }
+                        showCreditDialog = true
                     }
                 },
                 onClearError = { viewModel.clearAiErrorMessage() }
@@ -381,21 +355,14 @@ fun AiWishGeneratorScreen(
                 onDelete = { viewModel.deleteAiWishHistory(it) },
                 onCreateCard = { text, name ->
                     val cost = SubscriptionManager.CARD_CREATION_CREDIT_COST
-                    if (isPro) {
+                    if (!SubscriptionManager.hasEnoughCredits(cost)) {
+                        showCreditDialog = true
+                    } else if (SubscriptionManager.useCredits(cost)) {
+                        Toast.makeText(context, "✨ 25 credits used for AI card creation! (Balance: ${SubscriptionManager.credits.value})", Toast.LENGTH_SHORT).show()
                         viewModel.prepareCardFromAiWish(text, name)
                         onNavigateToCreateCard()
                     } else {
-                        if (!SubscriptionManager.hasEnoughCredits(cost)) {
-                            showCreditDialog = true
-                        } else {
-                            if (SubscriptionManager.useCredits(cost)) {
-                                Toast.makeText(context, "✨ 25 credits used for AI card creation! (Balance: ${SubscriptionManager.credits.value})", Toast.LENGTH_SHORT).show()
-                                viewModel.prepareCardFromAiWish(text, name)
-                                onNavigateToCreateCard()
-                            } else {
-                                showCreditDialog = true
-                            }
-                        }
+                        showCreditDialog = true
                     }
                 },
                 onSaveWish = { text, occ -> viewModel.saveAiWishToFavorites(text, occ) }
@@ -641,29 +608,49 @@ private fun AiGeneratorContent(
 
             // Live Credit Calculation Card
             Spacer(modifier = Modifier.height(8.dp))
+            val canAfford = credits >= wishLength.creditCost
+            val remainingAfter = maxOf(0, credits - wishLength.creditCost)
             Surface(
                 shape = RoundedCornerShape(12.dp),
-                color = HolidayGold.copy(alpha = 0.12f),
-                border = BorderStroke(1.dp, HolidayGold.copy(alpha = 0.4f)),
+                color = if (canAfford) HolidayGold.copy(alpha = 0.12f) else HolidayCrimson.copy(alpha = 0.08f),
+                border = BorderStroke(1.dp, if (canAfford) HolidayGold.copy(alpha = 0.45f) else HolidayCrimson.copy(alpha = 0.45f)),
                 modifier = Modifier.fillMaxWidth().testTag("credit_calculation_card")
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("⚡", fontSize = 16.sp)
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "Live Credit Calculation & Deduction",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("⚡", fontSize = 16.sp)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Live Credit Calculation & Deduction",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (canAfford) HolidayPineGreen.copy(alpha = 0.15f) else HolidayCrimson.copy(alpha = 0.15f)
+                        ) {
+                            Text(
+                                text = if (canAfford) "Ready ✓" else "Low Credits",
+                                fontSize = 10.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (canAfford) HolidayPineGreen else HolidayCrimson,
+                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+                            )
+                        }
                     }
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = "• Selected Length: ${wishLength.displayName} (${wishLength.wordRange})\n" +
                                "• Required Credits: ${wishLength.creditCost} Credits (deducted upon generation)\n" +
                                "• Current Balance: $credits Credits\n" +
-                               "• Balance After Generation: ${if (isPro) "Unlimited (Pro Active 👑)" else "${maxOf(0, credits - wishLength.creditCost)} Credits"}",
+                               "• Balance After Generation: $remainingAfter Credits",
                         fontSize = 11.5.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         lineHeight = 17.sp
@@ -970,7 +957,7 @@ private fun GeneratedResultCard(
                             ClipboardHelper.copyText(context, textToCopy, "Wish copied! ✨")
                         },
                         shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.weight(1f).testTag("ai_copy_button"),
+                        modifier = Modifier.weight(1f).height(48.dp).testTag("ai_copy_button"),
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp)
                     ) {
                         Icon(imageVector = Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(15.dp))
@@ -978,29 +965,13 @@ private fun GeneratedResultCard(
                         Text("Copy", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                     }
 
-                    // Share button
+                    // Share button (user already paid AI credits to generate this wish)
                     OutlinedButton(
                         onClick = {
-                            val isPro = SubscriptionManager.isPro.value
-                            if (isPro) {
-                                ShareHelper.shareWish(context, result.text, "AI Holiday Wish")
-                            } else {
-                                val act = context as? Activity
-                                if (act != null) {
-                                    AdManager.showRewardedAd(
-                                        activity = act,
-                                        onRewardEarned = { /* 1 credit added */ },
-                                        onDismiss = {
-                                            ShareHelper.shareWish(context, result.text, "AI Holiday Wish")
-                                        }
-                                    )
-                                } else {
-                                    ShareHelper.shareWish(context, result.text, "AI Holiday Wish")
-                                }
-                            }
+                            ShareHelper.shareWish(context, result.text, "AI Holiday Wish", skipAdCheck = true)
                         },
                         shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.weight(1f).testTag("ai_share_button"),
+                        modifier = Modifier.weight(1f).height(48.dp).testTag("ai_share_button"),
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp)
                     ) {
                         Icon(imageVector = Icons.Default.Share, contentDescription = null, modifier = Modifier.size(15.dp))
@@ -1008,15 +979,15 @@ private fun GeneratedResultCard(
                         Text("Share", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                     }
 
-                    // Save button
+                    // Save button (does not overwrite clipboard)
                     OutlinedButton(
                         onClick = {
                             onSaveWish(result.text, result.occasion.displayName)
                             isSaved = true
-                            ClipboardHelper.copyText(context, "", "Wish saved to Favorites! 💖")
+                            Toast.makeText(context, "Wish saved to Favorites! 💖", Toast.LENGTH_SHORT).show()
                         },
                         shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.weight(1f).testTag("ai_save_button"),
+                        modifier = Modifier.weight(1f).height(48.dp).testTag("ai_save_button"),
                         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp)
                     ) {
                         Icon(
@@ -1041,11 +1012,11 @@ private fun GeneratedResultCard(
                         onClick = { onCreateCard(result.text, result.recipientName) },
                         colors = ButtonDefaults.buttonColors(containerColor = HolidayCrimson),
                         shape = RoundedCornerShape(14.dp),
-                        modifier = Modifier.weight(1.3f).testTag("ai_create_card_button")
+                        modifier = Modifier.weight(1.3f).height(48.dp).testTag("ai_create_card_button")
                     ) {
                         Icon(imageVector = Icons.Default.CardGiftcard, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Create Card", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        Text("Create Card (25 🪙)", fontWeight = FontWeight.Bold, fontSize = 12.5.sp)
                     }
 
                     // Generate Again button
@@ -1053,7 +1024,7 @@ private fun GeneratedResultCard(
                         onClick = onGenerateAgain,
                         enabled = !isGenerating,
                         shape = RoundedCornerShape(14.dp),
-                        modifier = Modifier.weight(1f).testTag("ai_generate_again_button")
+                        modifier = Modifier.weight(1f).height(48.dp).testTag("ai_generate_again_button")
                     ) {
                         Icon(imageVector = Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(4.dp))
@@ -1196,8 +1167,8 @@ private fun AiHistoryContent(
 
                             // Share
                             IconButton(
-                                onClick = { ShareHelper.shareWish(context, item.text, "Holiday Wish") },
-                                modifier = Modifier.size(36.dp).testTag("share_history_${item.id}")
+                                onClick = { ShareHelper.shareWish(context, item.text, "Holiday Wish", skipAdCheck = true) },
+                                modifier = Modifier.size(48.dp).testTag("share_history_${item.id}")
                             ) {
                                 Icon(imageVector = Icons.Default.Share, contentDescription = "Share", modifier = Modifier.size(18.dp))
                             }

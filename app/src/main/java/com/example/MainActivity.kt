@@ -5,11 +5,15 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -19,9 +23,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.example.data.ads.AdMobBanner
+import com.example.data.firebase.configureAppCheck
+import com.example.data.subscription.SubscriptionManager
 import com.example.ui.components.HolidayNavigationDrawer
 import com.example.ui.components.HolidayTopAppBar
 import com.example.ui.components.NotificationPermissionPrompt
@@ -38,6 +46,7 @@ import kotlinx.coroutines.launch
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        configureAppCheck(this, intent)
         enableEdgeToEdge()
         setContent {
             HolidayWishesTheme {
@@ -71,6 +80,7 @@ fun HolidayWishesApp(
     val currentRoute = navBackStackEntry?.destination?.route ?: Screen.Home.route
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
+    val isPro by SubscriptionManager.isPro.collectAsStateWithLifecycle()
 
     // Prompt user on app open to turn on notifications for alarms, countdowns, and wishes
     NotificationPermissionPrompt(
@@ -163,32 +173,47 @@ fun HolidayWishesApp(
                 }
             },
             bottomBar = {
-                HolidayBottomBar(
-                    currentRoute = currentRoute,
-                    onNavigateToRoute = { route ->
-                        if (route == Screen.Home.route) {
-                            val popped = navController.popBackStack(Screen.Home.route, inclusive = false)
-                            if (!popped) {
-                                navController.navigate(Screen.Home.route) {
-                                    popUpTo(navController.graph.startDestinationId) {
-                                        inclusive = false
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    if (!isPro) {
+                        Surface(
+                            tonalElevation = 2.dp,
+                            color = MaterialTheme.colorScheme.surface,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            AdMobBanner(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 2.dp)
+                            )
+                        }
+                    }
+                    HolidayBottomBar(
+                        currentRoute = currentRoute,
+                        onNavigateToRoute = { route ->
+                            if (route == Screen.Home.route) {
+                                val popped = navController.popBackStack(Screen.Home.route, inclusive = false)
+                                if (!popped) {
+                                    navController.navigate(Screen.Home.route) {
+                                        popUpTo(navController.graph.startDestinationId) {
+                                            inclusive = false
+                                        }
+                                        launchSingleTop = true
                                     }
-                                    launchSingleTop = true
                                 }
-                            }
-                        } else {
-                            com.example.ui.navigation.AdNavigationHelper.navigateWithSectionAdCheck(context, route) {
-                                navController.navigate(route) {
-                                    popUpTo(navController.graph.startDestinationId) {
-                                        saveState = true
+                            } else {
+                                com.example.ui.navigation.AdNavigationHelper.navigateWithSectionAdCheck(context, route) {
+                                    navController.navigate(route) {
+                                        popUpTo(navController.graph.startDestinationId) {
+                                            saveState = true
+                                        }
+                                        launchSingleTop = true
+                                        restoreState = true
                                     }
-                                    launchSingleTop = true
-                                    restoreState = true
                                 }
                             }
                         }
-                    }
-                )
+                    )
+                }
             }
         ) { innerPadding ->
             HolidayNavHost(

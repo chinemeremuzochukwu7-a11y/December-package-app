@@ -7,7 +7,11 @@ import com.example.data.subscription.SubscriptionManager
 
 object AdNavigationHelper {
 
-    // Sections requiring ads for free users before entering
+    private const val INTERSTITIAL_COOLDOWN_MS = 120_000L // 2 minutes minimum between interstitials
+    private var lastInterstitialShownAtMs: Long = 0L
+    private var gatedVisitCount: Int = 0
+
+    // Sections eligible for frequency-capped interstitial transitions for free users
     private val GATED_SECTIONS = setOf(
         Screen.BirthdayTracker.route,
         Screen.ExpensesTracker.route,
@@ -27,13 +31,21 @@ object AdNavigationHelper {
         val isPro = SubscriptionManager.isPro.value
 
         if (isGated && !isPro) {
+            gatedVisitCount += 1
+            val now = System.currentTimeMillis()
+            val cooldownElapsed = (now - lastInterstitialShownAtMs) >= INTERSTITIAL_COOLDOWN_MS
+            val shouldShowInterstitial = gatedVisitCount >= 2 && cooldownElapsed
+
             val activity = context as? Activity
-            if (activity != null) {
-                // Show ad before entering section for free users
+            if (shouldShowInterstitial && activity != null) {
+                lastInterstitialShownAtMs = now
                 AdManager.showInterstitialAd(activity) {
                     onNavigate()
                 }
             } else {
+                if (activity != null) {
+                    AdManager.loadInterstitialAd(activity)
+                }
                 onNavigate()
             }
         } else {

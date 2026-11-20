@@ -1,5 +1,6 @@
 package com.example.ui.viewmodel
 
+import android.app.Activity
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -10,8 +11,8 @@ import com.example.data.local.FavoriteRepository
 import com.example.data.local.FavoriteWishEntity
 import com.example.data.local.SavedCardEntity
 import com.example.data.repository.AiWishRepository
-import com.example.data.repository.MockAiWishRepository
 import com.example.data.repository.CardTemplatesRepository
+import com.example.data.repository.GeminiAiWishRepository
 import com.example.data.repository.MonetizationManager
 import com.example.data.repository.PricingTiers
 import com.example.data.repository.WishGenerator
@@ -34,6 +35,7 @@ import com.example.model.GeneratorTone
 import com.example.model.Wish
 import com.example.model.WishCategory
 import com.example.model.WishGenerationResult
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -83,8 +85,8 @@ class HolidayViewModel(application: Application) : AndroidViewModel(application)
             initialValue = emptyList()
         )
 
-    // AI Wish Generator Architecture & State
-    private val aiWishRepository: AiWishRepository = MockAiWishRepository()
+    // AI Wish Generator Architecture & State (Production Gemini via Firebase AI Logic)
+    private val aiWishRepository: AiWishRepository = GeminiAiWishRepository(application)
     private val aiGeneratedWishDao = db.aiGeneratedWishDao()
 
     val aiWishHistory: StateFlow<List<AiGeneratedWishEntity>> = aiGeneratedWishDao.getAllHistory()
@@ -508,7 +510,7 @@ class HolidayViewModel(application: Application) : AndroidViewModel(application)
         _aiErrorMessage.value = null
     }
 
-    fun generateAiWish() {
+    fun generateAiWish(deductedCost: Int = 0) {
         viewModelScope.launch {
             _aiIsGenerating.value = true
             _aiErrorMessage.value = null
@@ -526,6 +528,9 @@ class HolidayViewModel(application: Application) : AndroidViewModel(application)
 
             val result = aiWishRepository.generateWish(request)
             result.onSuccess { response ->
+                if (deductedCost > 0) {
+                    SubscriptionManager.commitReservedCredits(deductedCost)
+                }
                 _aiGeneratedResult.value = response
                 val entity = AiGeneratedWishEntity(
                     id = response.id,
@@ -539,16 +544,24 @@ class HolidayViewModel(application: Application) : AndroidViewModel(application)
                 )
                 aiGeneratedWishDao.insertWish(entity)
                 com.example.utils.RateAppManager.triggerMagicEvent(getApplication(), "✨ Magical AI Wish Created!")
-            }.onFailure {
-                _aiErrorMessage.value = "Something went wrong. Please try again."
+            }.onFailure { err ->
+                if (deductedCost > 0) {
+                    SubscriptionManager.releaseReservedCredits(deductedCost)
+                }
+                val baseMsg = err.message ?: "Unable to reach Gemini AI. Please check your connection."
+                _aiErrorMessage.value = if (deductedCost > 0) {
+                    "$baseMsg ($deductedCost credits restored)"
+                } else {
+                    baseMsg
+                }
             }
 
             _aiIsGenerating.value = false
         }
     }
 
-    fun generateAgainAiWish() {
-        generateAiWish()
+    fun generateAgainAiWish(deductedCost: Int = 0) {
+        generateAiWish(deductedCost = deductedCost)
     }
 
     fun saveAiWishToFavorites(wishText: String, occasionName: String) {
@@ -600,20 +613,35 @@ class HolidayViewModel(application: Application) : AndroidViewModel(application)
         return monetizationManager.isCardUnlocked(template.id, template.isPro)
     }
 
-    fun purchaseProTier(tierId: String): Boolean {
-        val app = getApplication<android.app.Application>()
+    fun purchaseProTier(
+        activity: Activity?,
+        tierId: String,
+        onSuccess: () -> Unit = {},
+        onError: (String) -> Unit = {}
+    ) {
+        val app = getApplication<Application>()
         if (!com.example.utils.NetworkUtils.isNetworkAvailable(app)) {
-            return false
+            onError("No internet connection. Please connect to Wi-Fi or mobile data before upgrading.")
+            return
         }
-        return monetizationManager.completePurchase(tierId)
+        if (activity == null) {
+            onError("Unable to open Google Play Billing screen.")
+            return
+        }
+        SubscriptionManager.purchaseByProductId(
+            activity = activity,
+            productId = tierId,
+            onSuccess = onSuccess,
+            onError = onError
+        )
     }
 
     fun unlockCardViaRewardedAd(cardId: String) {
         monetizationManager.unlockCardViaRewardedAd(cardId)
     }
 
-    fun restorePurchases(): Boolean {
-        return monetizationManager.restorePurchases()
+    fun restorePurchases(onComplete: (Boolean) -> Unit = {}) {
+        SubscriptionManager.restorePurchases(onComplete)
     }
 
     // ============================================================
@@ -634,89 +662,105 @@ class HolidayViewModel(application: Application) : AndroidViewModel(application)
 
     /**
      * Regenerates a wish with fresh AI-generated message (15 credits).
-     * Checks user credit balance and deducts 15 credits.
-     * Updates the UI instantly, and updates Room DB if the wish was saved to favorites.
+     * Refunds credits automatically if Gemini fails.
      */
     fun regenerateWishWithAi(
-        wish: Wish, 
+        wish: Wish,
         onComplete: ((String) -> Unit)? = null,
-        onInsufficientCredits: (() -> Unit)? = null
+        onInsufficientCredits: (() -> Unit)? = null,
+        onError: ((String) -> Unit)? = null
     ): Boolean {
         val cost = SubscriptionManager.REGENERATE_TEXT_CREDIT_COST
-        if (!SubscriptionManager.hasEnoughCredits(cost)) {
+        if (!SubscriptionManager.hasEnoughCredits(cost) || !SubscriptionManager.reserveCredits(cost)) {
             onInsufficientCredits?.invoke()
             return false
         }
-        SubscriptionManager.useCredits(cost)
         viewModelScope.launch {
-            val newText = aiWishRepository.regenerateWishText(
-                category = wish.category,
-                currentText = _regeneratedWishTexts.value[wish.id] ?: wish.text,
-                seed = System.currentTimeMillis()
-            )
-            _regeneratedWishTexts.value = _regeneratedWishTexts.value + (wish.id to newText)
+            try {
+                val newText = aiWishRepository.regenerateWishText(
+                    category = wish.category,
+                    currentText = _regeneratedWishTexts.value[wish.id] ?: wish.text,
+                    seed = System.currentTimeMillis()
+                )
+                SubscriptionManager.commitReservedCredits(cost)
+                _regeneratedWishTexts.value = _regeneratedWishTexts.value + (wish.id to newText)
 
-            // If this wish is currently in favorites, keep Room DB in sync
-            val existingFav = favorites.value.find { it.id == wish.id }
-            if (existingFav != null) {
-                favoriteRepository.saveFavorite(existingFav.copy(text = newText))
+                val existingFav = favorites.value.find { it.id == wish.id }
+                if (existingFav != null) {
+                    favoriteRepository.saveFavorite(existingFav.copy(text = newText))
+                }
+                onComplete?.invoke(newText)
+            } catch (e: CancellationException) {
+                SubscriptionManager.releaseReservedCredits(cost)
+                throw e
+            } catch (e: Exception) {
+                SubscriptionManager.releaseReservedCredits(cost)
+                onError?.invoke(e.message ?: "AI regeneration failed. $cost credits restored.")
             }
-            onComplete?.invoke(newText)
         }
         return true
     }
 
     /**
      * Regenerates a saved favorite wish in Room DB with fresh AI text (15 credits).
-     * Checks user credit balance and deducts 15 credits.
+     * Refunds credits automatically if Gemini fails.
      */
     fun regenerateFavoriteWishWithAi(
-        favoriteId: String, 
+        favoriteId: String,
         onComplete: ((String) -> Unit)? = null,
-        onInsufficientCredits: (() -> Unit)? = null
+        onInsufficientCredits: (() -> Unit)? = null,
+        onError: ((String) -> Unit)? = null
     ): Boolean {
         val cost = SubscriptionManager.REGENERATE_TEXT_CREDIT_COST
-        if (!SubscriptionManager.hasEnoughCredits(cost)) {
+        val fav = favorites.value.find { it.id == favoriteId } ?: return false
+        if (!SubscriptionManager.hasEnoughCredits(cost) || !SubscriptionManager.reserveCredits(cost)) {
             onInsufficientCredits?.invoke()
             return false
         }
-        SubscriptionManager.useCredits(cost)
         viewModelScope.launch {
-            val fav = favorites.value.find { it.id == favoriteId } ?: return@launch
-            val category = try {
-                WishCategory.valueOf(fav.category.uppercase().replace(" ", "_"))
+            try {
+                val category = try {
+                    WishCategory.valueOf(fav.category.uppercase().replace(" ", "_"))
+                } catch (e: Exception) {
+                    WishCategory.GENERAL
+                }
+                val newText = aiWishRepository.regenerateWishText(
+                    category = category,
+                    currentText = fav.text,
+                    seed = System.currentTimeMillis()
+                )
+                SubscriptionManager.commitReservedCredits(cost)
+                favoriteRepository.saveFavorite(fav.copy(text = newText))
+                _regeneratedWishTexts.value = _regeneratedWishTexts.value + (favoriteId to newText)
+                onComplete?.invoke(newText)
+            } catch (e: CancellationException) {
+                SubscriptionManager.releaseReservedCredits(cost)
+                throw e
             } catch (e: Exception) {
-                WishCategory.GENERAL
+                SubscriptionManager.releaseReservedCredits(cost)
+                onError?.invoke(e.message ?: "AI regeneration failed. $cost credits restored.")
             }
-            val newText = aiWishRepository.regenerateWishText(
-                category = category,
-                currentText = fav.text,
-                seed = System.currentTimeMillis()
-            )
-            favoriteRepository.saveFavorite(fav.copy(text = newText))
-            _regeneratedWishTexts.value = _regeneratedWishTexts.value + (favoriteId to newText)
-            onComplete?.invoke(newText)
         }
         return true
     }
 
     /**
-     * Regenerates the active custom card message in CustomizeCardScreen with AI (15 credits).
-     * Checks user credit balance and deducts 15 credits.
+     * Regenerates the active custom card message in CustomizeCardScreen with AI.
+     * Single source of credit deduction & automatic refund on Gemini error.
      */
     fun regenerateCardMessageWithAi(
         tone: AiTone? = null,
         length: AiWishLength? = null,
         customPrompt: String? = null,
+        cost: Int = SubscriptionManager.REGENERATE_TEXT_CREDIT_COST,
         onSuccess: ((String) -> Unit)? = null,
-        onInsufficientCredits: (() -> Unit)? = null
+        onInsufficientCredits: (() -> Unit)? = null,
+        onError: ((String) -> Unit)? = null
     ): Boolean {
-        val cost = SubscriptionManager.REGENERATE_TEXT_CREDIT_COST
-        if (!SubscriptionManager.hasEnoughCredits(cost)) {
+        if (!SubscriptionManager.hasEnoughCredits(cost) || !SubscriptionManager.reserveCredits(cost)) {
             onInsufficientCredits?.invoke()
             return false
         }
-        SubscriptionManager.useCredits(cost)
         val selectedTone = tone ?: _cardAiTone.value
         val selectedLength = length ?: _cardAiLength.value
         val selectedPrompt = customPrompt ?: _cardAiCustomPrompt.value
@@ -736,8 +780,15 @@ class HolidayViewModel(application: Application) : AndroidViewModel(application)
                     customPrompt = selectedPrompt,
                     seed = System.currentTimeMillis()
                 )
+                SubscriptionManager.commitReservedCredits(cost)
                 _cardCustomMessage.value = newGreeting
                 onSuccess?.invoke(newGreeting)
+            } catch (e: CancellationException) {
+                SubscriptionManager.releaseReservedCredits(cost)
+                throw e
+            } catch (e: Exception) {
+                SubscriptionManager.releaseReservedCredits(cost)
+                onError?.invoke(e.message ?: "AI generation failed. $cost credits restored.")
             } finally {
                 _cardAiIsGenerating.value = false
             }
@@ -747,75 +798,91 @@ class HolidayViewModel(application: Application) : AndroidViewModel(application)
 
     /**
      * Regenerates the default message of a card template in CardsScreen grid (15 credits).
-     * Checks user credit balance and deducts 15 credits.
      */
     fun regenerateCardTemplateDefaultMessage(
-        template: CardTemplate, 
+        template: CardTemplate,
         onComplete: ((String) -> Unit)? = null,
-        onInsufficientCredits: (() -> Unit)? = null
+        onInsufficientCredits: (() -> Unit)? = null,
+        onError: ((String) -> Unit)? = null
     ): Boolean {
         val cost = SubscriptionManager.REGENERATE_TEXT_CREDIT_COST
-        if (!SubscriptionManager.hasEnoughCredits(cost)) {
+        if (!SubscriptionManager.hasEnoughCredits(cost) || !SubscriptionManager.reserveCredits(cost)) {
             onInsufficientCredits?.invoke()
             return false
         }
-        SubscriptionManager.useCredits(cost)
         viewModelScope.launch {
-            val newText = aiWishRepository.generateCardGreeting(
-                occasion = template.occasion,
-                recipientName = "",
-                senderName = "",
-                tone = AiTone.WARM,
-                length = AiWishLength.MEDIUM,
-                customPrompt = "",
-                seed = System.currentTimeMillis()
-            )
-            _customCardTemplateMessages.value = _customCardTemplateMessages.value + (template.id to newText)
-            onComplete?.invoke(newText)
+            try {
+                val newText = aiWishRepository.generateCardGreeting(
+                    occasion = template.occasion,
+                    recipientName = "",
+                    senderName = "",
+                    tone = AiTone.WARM,
+                    length = AiWishLength.MEDIUM,
+                    customPrompt = "",
+                    seed = System.currentTimeMillis()
+                )
+                SubscriptionManager.commitReservedCredits(cost)
+                _customCardTemplateMessages.value = _customCardTemplateMessages.value + (template.id to newText)
+                onComplete?.invoke(newText)
+            } catch (e: CancellationException) {
+                SubscriptionManager.releaseReservedCredits(cost)
+                throw e
+            } catch (e: Exception) {
+                SubscriptionManager.releaseReservedCredits(cost)
+                onError?.invoke(e.message ?: "AI generation failed. $cost credits restored.")
+            }
         }
         return true
     }
 
     /**
      * Regenerates the text of a saved card in MyCardsScreen and updates Room DB (15 credits).
-     * Checks user credit balance and deducts 15 credits.
      */
     fun regenerateSavedCardTextWithAi(
-        cardId: String, 
+        cardId: String,
         onComplete: ((String) -> Unit)? = null,
-        onInsufficientCredits: (() -> Unit)? = null
+        onInsufficientCredits: (() -> Unit)? = null,
+        onError: ((String) -> Unit)? = null
     ): Boolean {
         val cost = SubscriptionManager.REGENERATE_TEXT_CREDIT_COST
-        if (!SubscriptionManager.hasEnoughCredits(cost)) {
+        val card = savedCards.value.find { it.id == cardId } ?: return false
+        if (!SubscriptionManager.hasEnoughCredits(cost) || !SubscriptionManager.reserveCredits(cost)) {
             onInsufficientCredits?.invoke()
             return false
         }
-        SubscriptionManager.useCredits(cost)
         viewModelScope.launch {
-            val card = savedCards.value.find { it.id == cardId } ?: return@launch
-            val occasion = try {
-                CardOccasion.valueOf(card.occasion)
+            try {
+                val occasion = try {
+                    CardOccasion.valueOf(card.occasion)
+                } catch (e: Exception) {
+                    CardOccasion.CHRISTMAS
+                }
+                val newText = aiWishRepository.generateCardGreeting(
+                    occasion = occasion,
+                    recipientName = card.recipientName,
+                    senderName = card.senderName,
+                    tone = AiTone.WARM,
+                    length = AiWishLength.MEDIUM,
+                    customPrompt = "",
+                    seed = System.currentTimeMillis()
+                )
+                SubscriptionManager.commitReservedCredits(cost)
+                cardRepository.saveCard(card.copy(message = newText))
+                onComplete?.invoke(newText)
+            } catch (e: CancellationException) {
+                SubscriptionManager.releaseReservedCredits(cost)
+                throw e
             } catch (e: Exception) {
-                CardOccasion.CHRISTMAS
+                SubscriptionManager.releaseReservedCredits(cost)
+                onError?.invoke(e.message ?: "AI generation failed. $cost credits restored.")
             }
-            val newText = aiWishRepository.generateCardGreeting(
-                occasion = occasion,
-                recipientName = card.recipientName,
-                senderName = card.senderName,
-                tone = AiTone.WARM,
-                length = AiWishLength.MEDIUM,
-                customPrompt = "",
-                seed = System.currentTimeMillis()
-            )
-            cardRepository.saveCard(card.copy(message = newText))
-            onComplete?.invoke(newText)
         }
         return true
     }
 
     /**
-     * Creates a card with AI: selects best template, crafts personalized greeting,
-     * and sets state for immediate customization/preview.
+     * Creates a card with AI asynchronously (25 credits): checks balance, deducts 25 credits,
+     * invokes Gemini off the main thread, and refunds automatically if Gemini fails.
      */
     fun createCardWithAi(
         occasion: CardOccasion,
@@ -825,8 +892,17 @@ class HolidayViewModel(application: Application) : AndroidViewModel(application)
         themeStyle: CardDecorationStyle,
         length: AiWishLength,
         customPrompt: String = "",
-        photoUri: String? = null
-    ): CardTemplate {
+        photoUri: String? = null,
+        onSuccess: (CardTemplate) -> Unit = {},
+        onInsufficientCredits: () -> Unit = {},
+        onError: (String) -> Unit = {}
+    ) {
+        val cost = SubscriptionManager.CARD_CREATION_CREDIT_COST
+        if (!SubscriptionManager.hasEnoughCredits(cost) || !SubscriptionManager.reserveCredits(cost)) {
+            onInsufficientCredits()
+            return
+        }
+
         val templatesForOccasion = when (occasion) {
             CardOccasion.CHRISTMAS -> CardTemplatesRepository.getChristmasTemplates()
             CardOccasion.NEW_YEAR -> CardTemplatesRepository.getNewYearTemplates()
@@ -836,32 +912,44 @@ class HolidayViewModel(application: Application) : AndroidViewModel(application)
             ?: templatesForOccasion.firstOrNull()
             ?: cardTemplates.first()
 
-        val generatedMessage = kotlinx.coroutines.runBlocking {
-            aiWishRepository.generateCardGreeting(
-                occasion = occasion,
-                recipientName = recipientName,
-                senderName = senderName,
-                tone = tone,
-                length = length,
-                customPrompt = customPrompt,
-                seed = System.currentTimeMillis()
-            )
+        viewModelScope.launch {
+            _cardAiIsGenerating.value = true
+            try {
+                val generatedMessage = aiWishRepository.generateCardGreeting(
+                    occasion = occasion,
+                    recipientName = recipientName,
+                    senderName = senderName,
+                    tone = tone,
+                    length = length,
+                    customPrompt = customPrompt,
+                    seed = System.currentTimeMillis()
+                )
+                SubscriptionManager.commitReservedCredits(cost)
+
+                _selectedCardTemplate.value = matchingTemplate
+                _cardRecipientName.value = recipientName.trim()
+                _cardCustomMessage.value = generatedMessage
+                _cardSenderName.value = senderName.trim()
+                _cardPhotoUri.value = photoUri
+                _cardTextSizeSp.value = 14.5f
+                _cardTextAlign.value = "Center"
+                _showRecipient.value = recipientName.isNotBlank()
+                _showSender.value = senderName.isNotBlank()
+                _cardAiTone.value = tone
+                _cardAiLength.value = length
+                _cardAiCustomPrompt.value = customPrompt
+
+                onSuccess(matchingTemplate)
+            } catch (e: CancellationException) {
+                SubscriptionManager.releaseReservedCredits(cost)
+                throw e
+            } catch (e: Exception) {
+                SubscriptionManager.releaseReservedCredits(cost)
+                onError(e.message ?: "AI card creation failed. $cost credits restored.")
+            } finally {
+                _cardAiIsGenerating.value = false
+            }
         }
-
-        _selectedCardTemplate.value = matchingTemplate
-        _cardRecipientName.value = recipientName.trim()
-        _cardCustomMessage.value = generatedMessage
-        _cardSenderName.value = senderName.trim()
-        _cardPhotoUri.value = photoUri
-        _cardTextSizeSp.value = 14.5f
-        _cardTextAlign.value = "Center"
-        _showRecipient.value = recipientName.isNotBlank()
-        _showSender.value = senderName.isNotBlank()
-        _cardAiTone.value = tone
-        _cardAiLength.value = length
-        _cardAiCustomPrompt.value = customPrompt
-
-        return matchingTemplate
     }
 
     fun prepareCardFromWish(wishText: String, occasion: CardOccasion = CardOccasion.CHRISTMAS, photoUri: String? = null) {
@@ -880,28 +968,54 @@ class HolidayViewModel(application: Application) : AndroidViewModel(application)
     }
 
     /**
-     * Regenerates an individual generated wish in CreateWishScreen.
+     * Regenerates an individual generated wish in CreateWishScreen (15 credits).
      */
-    fun regenerateGeneratedWish(resultId: String) {
+    fun regenerateGeneratedWish(
+        resultId: String,
+        onComplete: ((String) -> Unit)? = null,
+        onInsufficientCredits: (() -> Unit)? = null,
+        onError: ((String) -> Unit)? = null
+    ): Boolean {
+        val cost = SubscriptionManager.REGENERATE_TEXT_CREDIT_COST
         val currentList = _generatedWishes.value.toMutableList()
         val index = currentList.indexOfFirst { it.id == resultId }
-        if (index != -1) {
-            val item = currentList[index]
-            val occasion = when (item.occasion) {
-                GeneratorOccasion.CHRISTMAS -> WishCategory.CHRISTMAS
-                GeneratorOccasion.NEW_YEAR -> WishCategory.NEW_YEAR
-                GeneratorOccasion.HOLIDAY_SEASON -> WishCategory.GENERAL
-                else -> WishCategory.GENERAL
-            }
-            viewModelScope.launch {
+        if (index == -1) return false
+
+        if (!SubscriptionManager.hasEnoughCredits(cost) || !SubscriptionManager.reserveCredits(cost)) {
+            onInsufficientCredits?.invoke()
+            return false
+        }
+
+        val item = currentList[index]
+        val occasion = when (item.occasion) {
+            GeneratorOccasion.CHRISTMAS -> WishCategory.CHRISTMAS
+            GeneratorOccasion.NEW_YEAR -> WishCategory.NEW_YEAR
+            GeneratorOccasion.HOLIDAY_SEASON -> WishCategory.GENERAL
+            else -> WishCategory.GENERAL
+        }
+        viewModelScope.launch {
+            try {
                 val newText = aiWishRepository.regenerateWishText(
                     category = occasion,
                     currentText = item.wishText,
                     seed = System.currentTimeMillis()
                 )
-                currentList[index] = item.copy(wishText = newText)
-                _generatedWishes.value = currentList
+                SubscriptionManager.commitReservedCredits(cost)
+                val latestList = _generatedWishes.value.toMutableList()
+                val latestIdx = latestList.indexOfFirst { it.id == resultId }
+                if (latestIdx != -1) {
+                    latestList[latestIdx] = item.copy(wishText = newText)
+                    _generatedWishes.value = latestList
+                }
+                onComplete?.invoke(newText)
+            } catch (e: CancellationException) {
+                SubscriptionManager.releaseReservedCredits(cost)
+                throw e
+            } catch (e: Exception) {
+                SubscriptionManager.releaseReservedCredits(cost)
+                onError?.invoke(e.message ?: "AI regeneration failed. $cost credits restored.")
             }
         }
+        return true
     }
 }

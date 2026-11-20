@@ -22,10 +22,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
+import android.widget.Toast
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -46,6 +48,7 @@ fun WishesScreen(
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
     val filteredWishes by viewModel.filteredWishes.collectAsStateWithLifecycle()
     val favoriteIds by viewModel.favoriteIds.collectAsStateWithLifecycle()
+    val context = LocalContext.current
 
     Column(
         modifier = modifier
@@ -143,7 +146,20 @@ fun WishesScreen(
                             wish = wish,
                             isFavorite = favoriteIds.contains(wish.id),
                             onToggleFavorite = { viewModel.toggleFavorite(wish) },
-                            onRegenerate = { viewModel.regenerateWishWithAi(wish) }
+                            onRegenerate = {
+                                viewModel.regenerateWishWithAi(
+                                    wish = wish,
+                                    onComplete = {
+                                        Toast.makeText(context, "Wish regenerated with AI! ✨", Toast.LENGTH_SHORT).show()
+                                    },
+                                    onInsufficientCredits = {
+                                        Toast.makeText(context, "Need 15 AI credits to regenerate! Watch an ad or upgrade to Pro.", Toast.LENGTH_LONG).show()
+                                    },
+                                    onError = { err ->
+                                        Toast.makeText(context, err, Toast.LENGTH_LONG).show()
+                                    }
+                                )
+                            }
                         )
                     }
                 }

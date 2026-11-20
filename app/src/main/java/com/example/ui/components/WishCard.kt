@@ -192,10 +192,7 @@ fun WishCard(
                 ) {
                     if (onRegenerate != null) {
                         Surface(
-                            onClick = {
-                                onRegenerate()
-                                Toast.makeText(context, "Regenerated wish with AI! ✨", Toast.LENGTH_SHORT).show()
-                            },
+                            onClick = { onRegenerate() },
                             shape = RoundedCornerShape(12.dp),
                             color = HolidayGold.copy(alpha = 0.16f),
                             border = BorderStroke(1.dp, HolidayGold.copy(alpha = 0.55f)),

@@ -102,10 +102,16 @@ class ExampleRobolectricTest {
     }
 
     @Test
-    fun `verify RevenueCat configuration and entitlement identifiers`() {
+    fun `verify Play Billing configuration and 3 subscription tiers`() {
         assertEquals("holiday_wishes_pro", com.example.data.subscription.SubscriptionManager.ENTITLEMENT_HOLIDAY_WISHES_PRO)
-        assertEquals("holiday_wishes_yearly", com.example.data.subscription.SubscriptionManager.PRODUCT_YEARLY)
         assertEquals("holiday_wishes_monthly", com.example.data.subscription.SubscriptionManager.PRODUCT_MONTHLY)
+        assertEquals("holiday_wishes_plus_monthly", com.example.data.subscription.SubscriptionManager.PRODUCT_PLUS_MONTHLY)
+        assertEquals("holiday_wishes_yearly", com.example.data.subscription.SubscriptionManager.PRODUCT_YEARLY)
+        assertEquals(3, com.example.data.subscription.SubscriptionManager.AVAILABLE_PLANS.size)
+        assertEquals(3, com.example.data.repository.PricingTiers.ALL_TIERS.size)
+        assertEquals(2.90, com.example.data.repository.PricingTiers.STARTER_MONTHLY.priceNumeric, 0.001)
+        assertEquals(5.90, com.example.data.repository.PricingTiers.PLUS_MONTHLY.priceNumeric, 0.001)
+        assertEquals(35.00, com.example.data.repository.PricingTiers.ANNUAL_VIP.priceNumeric, 0.001)
     }
 
     @Test
@@ -144,7 +150,7 @@ class ExampleRobolectricTest {
     }
 
     @Test
-    fun `verify 1000+ cards, 500+ season templates, 1000+ wishes, and 300 credit subscription`() {
+    fun `verify 1000+ cards, 500+ season templates, 1000+ wishes, and profitable plan credit caps`() {
         val allCards = com.example.data.repository.CardTemplatesRepository.getAllTemplates()
         val seasonCards = com.example.data.repository.CardTemplatesRepository.getSeasonTemplates()
         val proCards = com.example.data.repository.CardTemplatesRepository.getProTemplates()
@@ -159,7 +165,9 @@ class ExampleRobolectricTest {
         assertTrue(allWishes.size >= 1000)
         assertTrue(proWishes.isNotEmpty())
 
-        assertEquals(300, com.example.data.subscription.SubscriptionManager.PLAN_MONTHLY.monthlyCredits)
-        assertTrue(com.example.data.subscription.SubscriptionManager.PLAN_YEARLY.yearlyCredits >= 3600)
+        assertEquals(150, com.example.data.subscription.SubscriptionManager.PLAN_MONTHLY.monthlyCredits)
+        assertEquals(400, com.example.data.subscription.SubscriptionManager.PLAN_PLUS_MONTHLY.monthlyCredits)
+        assertEquals(350, com.example.data.subscription.SubscriptionManager.PLAN_YEARLY.monthlyCredits)
+        assertEquals(4200, com.example.data.subscription.SubscriptionManager.PLAN_YEARLY.yearlyCredits)
     }
 }

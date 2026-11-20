@@ -2,6 +2,7 @@ package com.example
 
 import android.app.Application
 import android.util.Log
+import com.example.data.ads.AppOpenAdManager
 import com.example.data.subscription.SubscriptionManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -12,6 +13,11 @@ class MainApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        try {
+            AppOpenAdManager.initialize(this)
+        } catch (e: Throwable) {
+            Log.w("MainApplication", "App Open Ad setup notice: ${e.message}")
+        }
         // Initialize Play Billing in background to prevent any main thread hitch or preview emulator hang
         appScope.launch {
             try {

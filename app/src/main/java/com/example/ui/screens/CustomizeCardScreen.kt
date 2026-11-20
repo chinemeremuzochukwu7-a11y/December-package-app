@@ -31,14 +31,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.FormatAlignLeft
+import androidx.compose.material.icons.automirrored.filled.FormatAlignRight
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Flip
 import androidx.compose.material.icons.filled.FormatAlignCenter
-import androidx.compose.material.icons.filled.FormatAlignLeft
-import androidx.compose.material.icons.filled.FormatAlignRight
 import androidx.compose.material.icons.filled.MonetizationOn
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Save
@@ -89,6 +89,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import com.example.data.ads.AdManager
+import com.example.data.ads.AppOpenAdManager
 import com.example.data.subscription.SubscriptionManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -170,112 +171,69 @@ fun CustomizeCardScreen(
     var cachedImagePath by remember { mutableStateOf<String?>(null) }
     val activity = context as? Activity
 
-    val executeCardActionWithCredits = { onProceed: () -> Unit ->
-        if (isPro) {
+    val bronzeAccent = Color(0xFF6B4E00)
+
+    /**
+     * Pro templates require either an active Pro subscription or a single rewarded-ad unlock.
+     * Free templates and already-unlocked cards can be saved, downloaded, and shared cleanly
+     * without double-charging credits on top of AI generation/regeneration.
+     */
+    val ensureCardAccessThen = { actionDescription: String, onProceed: () -> Unit ->
+        val hasAccess = !template.isPro || isPro || viewModel.isCardUnlocked(template)
+        if (hasAccess) {
+            onProceed()
+        } else if (activity != null) {
+            Toast.makeText(
+                context,
+                "Watch a short ad to unlock and $actionDescription this Pro card! 🎁",
+                Toast.LENGTH_SHORT
+            ).show()
+            var rewardEarned = false
+            AdManager.showRewardedAd(
+                activity = activity,
+                onRewardEarned = {
+                    rewardEarned = true
+                    viewModel.unlockCardViaRewardedAd(template.id)
+                },
+                onDismiss = {
+                    if (rewardEarned) {
+                        onProceed()
+                    } else {
+                        Toast.makeText(
+                            context,
+                            "Complete the ad to unlock this Pro card or upgrade to Pro.",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                },
+                onFailed = { err ->
+                    Toast.makeText(context, err, Toast.LENGTH_SHORT).show()
+                }
+            )
+        } else if (com.example.BuildConfig.DEBUG) {
+            viewModel.unlockCardViaRewardedAd(template.id)
             onProceed()
         } else {
-            if (credits < SubscriptionManager.CARD_CREATION_CREDIT_COST) {
-                showCreditDialog = true
-            } else {
-                // Free users must watch rewarded ad before starting creation
-                if (activity != null) {
-                    AdManager.showRewardedAd(
-                        activity = activity,
-                        onRewardEarned = { /* 1 credit added */ },
-                        onDismiss = {
-                            if (SubscriptionManager.useCredits(SubscriptionManager.CARD_CREATION_CREDIT_COST)) {
-                                onProceed()
-                            } else {
-                                showCreditDialog = true
-                            }
-                        }
-                    )
-                } else {
-                    if (SubscriptionManager.useCredits(SubscriptionManager.CARD_CREATION_CREDIT_COST)) {
-                        onProceed()
-                    }
-                }
-            }
+            Toast.makeText(
+                context,
+                "Unable to load rewarded ad right now. Upgrade to Pro to unlock all cards.",
+                Toast.LENGTH_SHORT
+            ).show()
         }
     }
 
     val executeCardShare = {
-        val isCardUnlocked = !template.isPro || isPro || viewModel.isCardUnlocked(template)
-        if (!isCardUnlocked) {
-            if (activity != null) {
-                Toast.makeText(context, "Watch a short ad to unlock and share this Pro card! 🎁", Toast.LENGTH_SHORT).show()
-                AdManager.showRewardedAd(
-                    activity = activity,
-                    onRewardEarned = {
-                        viewModel.unlockCardViaRewardedAd(template.id)
-                        shareCardAction(
-                            context = context,
-                            template = template,
-                            templateTitle = template.title,
-                            recipient = recipientName,
-                            message = customMessage,
-                            sender = senderName,
-                            fontStyle = cardFontStyle,
-                            photoUri = cardPhotoUri
-                        )
-                    }
-                )
-            } else {
-                viewModel.unlockCardViaRewardedAd(template.id)
-                shareCardAction(
-                    context = context,
-                    template = template,
-                    templateTitle = template.title,
-                    recipient = recipientName,
-                    message = customMessage,
-                    sender = senderName,
-                    fontStyle = cardFontStyle,
-                    photoUri = cardPhotoUri
-                )
-            }
-        } else {
-            if (isPro) {
-                shareCardAction(
-                    context = context,
-                    template = template,
-                    templateTitle = template.title,
-                    recipient = recipientName,
-                    message = customMessage,
-                    sender = senderName,
-                    fontStyle = cardFontStyle,
-                    photoUri = cardPhotoUri
-                )
-            } else {
-                if (activity != null) {
-                    AdManager.showRewardedAd(
-                        activity = activity,
-                        onRewardEarned = { /* 1 credit added */ },
-                        onDismiss = {
-                            shareCardAction(
-                                context = context,
-                                template = template,
-                                templateTitle = template.title,
-                                recipient = recipientName,
-                                message = customMessage,
-                                sender = senderName,
-                                fontStyle = cardFontStyle,
-                                photoUri = cardPhotoUri
-                            )
-                        }
-                    )
-                } else {
-                    shareCardAction(
-                        context = context,
-                        template = template,
-                        templateTitle = template.title,
-                        recipient = recipientName,
-                        message = customMessage,
-                        sender = senderName,
-                        fontStyle = cardFontStyle,
-                        photoUri = cardPhotoUri
-                    )
-                }
-            }
+        ensureCardAccessThen("share") {
+            shareCardAction(
+                context = context,
+                template = template,
+                templateTitle = template.title,
+                recipient = recipientName,
+                message = customMessage,
+                sender = senderName,
+                fontStyle = cardFontStyle,
+                photoUri = cardPhotoUri
+            )
         }
     }
 
@@ -287,7 +245,7 @@ fun CustomizeCardScreen(
             },
             text = {
                 Text(
-                    "Creating a card with AI costs 25 credits, and regenerating text with AI costs 15 credits. You currently have $credits credits.\n\nWatch a rewarded ad to earn credits, or upgrade to Pro for unlimited card creation!"
+                    "Creating a card with AI costs 25 credits, and regenerating text with AI costs 15 credits. You currently have $credits credits.\n\nWatch a rewarded ad to earn credits, or upgrade to Pro (from $2.90/mo) for generous monthly AI credits!"
                 )
             },
             confirmButton = {
@@ -328,23 +286,39 @@ fun CustomizeCardScreen(
         ProUpgradeDialog(
             targetTemplate = template,
             onPurchaseTier = { tierId ->
-                viewModel.purchaseProTier(tierId)
-                Toast.makeText(context, "Welcome to Holiday Wishes Pro! Watermark removed! 🎉", Toast.LENGTH_LONG).show()
-                showProUpgradeDialog = false
+                viewModel.purchaseProTier(
+                    activity = activity,
+                    tierId = tierId,
+                    onSuccess = {
+                        Toast.makeText(context, "Welcome to Holiday Wishes Pro! Watermark removed! 🎉", Toast.LENGTH_LONG).show()
+                        showProUpgradeDialog = false
+                    },
+                    onError = { err ->
+                        Toast.makeText(context, err, Toast.LENGTH_LONG).show()
+                    }
+                )
             },
             onWatchRewardedAd = {
-                viewModel.unlockCardViaRewardedAd(template.id)
-                Toast.makeText(context, "Card unlocked! 🎄", Toast.LENGTH_SHORT).show()
                 showProUpgradeDialog = false
+                if (activity != null) {
+                    AdManager.showRewardedAd(
+                        activity = activity,
+                        onRewardEarned = {
+                            viewModel.unlockCardViaRewardedAd(template.id)
+                            Toast.makeText(context, "Card unlocked! 🎄", Toast.LENGTH_SHORT).show()
+                        }
+                    )
+                }
             },
             onRestorePurchases = {
-                val restored = viewModel.restorePurchases()
-                Toast.makeText(
-                    context,
-                    if (restored) "Purchases restored! Active Pro access confirmed."
-                    else "No existing purchases found.",
-                    Toast.LENGTH_SHORT
-                ).show()
+                viewModel.restorePurchases { restored ->
+                    Toast.makeText(
+                        context,
+                        if (restored) "Purchases restored! Active Pro access confirmed."
+                        else "No existing purchases found.",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
             },
             onDismiss = { showProUpgradeDialog = false }
         )
@@ -451,12 +425,12 @@ fun CustomizeCardScreen(
 
                 Surface(
                     shape = RoundedCornerShape(12.dp),
-                    color = HolidayGold.copy(alpha = 0.2f),
+                    color = HolidayGold.copy(alpha = 0.22f),
                     modifier = Modifier.padding(end = 8.dp)
                 ) {
                     Text(
                         text = template.badge,
-                        color = HolidayGold,
+                        color = bronzeAccent,
                         fontWeight = FontWeight.Bold,
                         fontSize = 11.sp,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
@@ -489,7 +463,7 @@ fun CustomizeCardScreen(
                 Spacer(modifier = Modifier.width(8.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = if (isPro) "👑 PRO Unlimited Card Studio" else "Card Creation: 15 Credits",
+                        text = if (isPro) "👑 PRO Card Studio • $credits Credits" else "AI Card Studio • Balance: $credits",
                         fontWeight = FontWeight.Bold,
                         fontSize = 12.5.sp,
                         maxLines = 1,
@@ -497,7 +471,7 @@ fun CustomizeCardScreen(
                     )
                     if (!isPro) {
                         Text(
-                            text = "Balance: $credits Credits • Watch ad to create",
+                            text = "AI Create: 25 Cr • AI Regen: 15 Cr",
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1
@@ -661,7 +635,7 @@ fun CustomizeCardScreen(
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Text(
-                                    text = "Upgrade to Pro ($9.99/mo or $79/yr) to remove watermark & unlock all luxury cards",
+                                    text = "Upgrade to Pro (from $2.90/mo) to remove watermark & unlock all luxury cards",
                                     style = MaterialTheme.typography.bodySmall,
                                     fontSize = 11.5.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -698,10 +672,10 @@ fun CustomizeCardScreen(
                         .padding(14.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    // Save Card Button (to My Cards / Room)
+                    // Save Card Button (to My Cards / Cloud Ledger)
                     Button(
                         onClick = {
-                            executeCardActionWithCredits {
+                            ensureCardAccessThen("save") {
                                 viewModel.saveCurrentCard {
                                     Toast.makeText(context, "Card saved to My Cards! 🎄", Toast.LENGTH_SHORT).show()
                                     onNavigateToMyCards()
@@ -727,7 +701,7 @@ fun CustomizeCardScreen(
                         // Download Card to Device Button
                         Button(
                             onClick = {
-                                executeCardActionWithCredits {
+                                ensureCardAccessThen("download") {
                                     val pristineBitmap = CardImageExporter.renderCardBitmap(
                                         template = template,
                                         customTitle = template.title,
@@ -752,7 +726,7 @@ fun CustomizeCardScreen(
                             shape = RoundedCornerShape(12.dp),
                             modifier = Modifier
                                 .weight(1f)
-                                .height(46.dp)
+                                .height(48.dp)
                                 .testTag("save_image_button")
                         ) {
                             Icon(
@@ -777,49 +751,66 @@ fun CustomizeCardScreen(
                             },
                             shape = RoundedCornerShape(12.dp),
                             border = BorderStroke(1.5.dp, HolidayGold),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                containerColor = HolidayGold.copy(alpha = 0.14f)
+                            ),
                             modifier = Modifier
                                 .weight(1f)
-                                .height(46.dp)
+                                .height(48.dp)
                                 .testTag("share_card_button")
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Share,
                                 contentDescription = null,
-                                tint = Color(0xFF3B2700),
+                                tint = bronzeAccent,
                                 modifier = Modifier.size(18.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
                                 text = "Share Card",
-                                color = Color(0xFF3B2700),
+                                color = bronzeAccent,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 13.sp
                             )
                         }
                     }
 
-                    // Schedule Auto-Send at exact date and time
+                    // Schedule Auto-Send at exact date and time (renders dedicated card PNG without screen UI)
                     OutlinedButton(
                         onClick = {
-                            if (cardViewRef != null) {
-                                try {
-                                    val bitmap = CardImageExporter.viewToBitmap(cardViewRef!!)
-                                    val cacheFolder = File(context.cacheDir, "images")
-                                    if (!cacheFolder.exists()) cacheFolder.mkdirs()
-                                    val cacheFile = File(cacheFolder, "card_sched_${System.currentTimeMillis()}.png")
-                                    val stream = FileOutputStream(cacheFile)
+                            try {
+                                val exportSize = when (cardAspectRatio) {
+                                    "Square" -> CardExportSize.SQUARE_POST
+                                    "Story" -> CardExportSize.STORY_PORTRAIT
+                                    else -> CardExportSize.CLASSIC_GREETING
+                                }
+                                val bitmap = CardImageExporter.renderCardBitmap(
+                                    template = template,
+                                    customTitle = template.title,
+                                    recipientName = recipientName,
+                                    customMessage = customMessage,
+                                    senderName = senderName,
+                                    fontStyle = cardFontStyle,
+                                    isPro = isPro,
+                                    exportSize = exportSize,
+                                    photoUri = cardPhotoUri,
+                                    context = context
+                                )
+                                val cacheFolder = File(context.cacheDir, "images")
+                                if (!cacheFolder.exists()) cacheFolder.mkdirs()
+                                val cacheFile = File(cacheFolder, "card_sched_${System.currentTimeMillis()}.png")
+                                FileOutputStream(cacheFile).use { stream ->
                                     bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, stream)
-                                    stream.close()
-                                    cachedImagePath = cacheFile.absolutePath
-                                } catch (ignored: Exception) {}
-                            }
+                                }
+                                cachedImagePath = cacheFile.absolutePath
+                            } catch (ignored: Exception) {}
                             showScheduleDialog = true
                         },
                         shape = RoundedCornerShape(12.dp),
                         border = BorderStroke(1.5.dp, HolidayCrimson),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(46.dp)
+                            .height(48.dp)
                             .testTag("schedule_send_button")
                     ) {
                         Icon(
@@ -906,14 +897,14 @@ fun CustomizeCardScreen(
                                 }
                                 Surface(
                                     shape = RoundedCornerShape(10.dp),
-                                    color = HolidayGold.copy(alpha = 0.2f),
+                                    color = HolidayGold.copy(alpha = 0.22f),
                                     border = BorderStroke(1.dp, HolidayGold)
                                 ) {
                                     Text(
                                         text = "Cost: ${selectedTextLength.tokensRequired} 🪙",
                                         fontSize = 11.5.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = HolidayGold,
+                                        color = bronzeAccent,
                                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                                     )
                                 }
@@ -1047,9 +1038,9 @@ fun CustomizeCardScreen(
                                     Spacer(modifier = Modifier.height(4.dp))
                                     Text(
                                         text = "• Selected: ${selectedTextLength.label} (${selectedTextLength.approxWords}) • Tone: ${selectedTone.displayName}\n" +
-                                               "• Required: ${selectedTextLength.tokensRequired} Tokens 🪙 (deducted upon creation)\n" +
+                                               "• Required: ${selectedTextLength.tokensRequired} Credits 🪙 (deducted upon creation)\n" +
                                                "• Current Balance: $credits Credits\n" +
-                                               "• Balance After Generation: ${if (isPro) "Unlimited (Pro Active 👑)" else "${maxOf(0, credits - selectedTextLength.tokensRequired)} Credits"}",
+                                               "• Balance After Generation: ${maxOf(0, credits - selectedTextLength.tokensRequired)} Credits",
                                         fontSize = 11.5.sp,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         lineHeight = 16.sp
@@ -1057,33 +1048,36 @@ fun CustomizeCardScreen(
                                 }
                             }
 
-                            // Generate and Deduct Tokens Button
+                            // Generate Greeting Button (single credit deduction inside ViewModel)
                             Button(
                                 onClick = {
                                     val tokensNeeded = selectedTextLength.tokensRequired
-                                    if (SubscriptionManager.hasEnoughCredits(tokensNeeded)) {
-                                        SubscriptionManager.useCredits(tokensNeeded)
-                                        viewModel.regenerateCardMessageWithAi(
-                                            tone = selectedTone,
-                                            length = when (selectedTextLength) {
-                                                CardTextLength.SHORT -> AiWishLength.SHORT
-                                                CardTextLength.MEDIUM -> AiWishLength.MEDIUM
-                                                CardTextLength.LONG -> AiWishLength.LONG
-                                                CardTextLength.POETIC -> AiWishLength.POETIC
-                                            },
-                                            customPrompt = customAiPrompt,
-                                            onSuccess = {
-                                                Toast.makeText(
-                                                    context,
-                                                    "Generated ${selectedTone.displayName} greeting! Used $tokensNeeded tokens 🪙",
-                                                    Toast.LENGTH_SHORT
-                                                ).show()
-                                            }
-                                        )
-                                    } else {
-                                        showCreditDialog = true
-                                    }
+                                    viewModel.regenerateCardMessageWithAi(
+                                        tone = selectedTone,
+                                        length = when (selectedTextLength) {
+                                            CardTextLength.SHORT -> AiWishLength.SHORT
+                                            CardTextLength.MEDIUM -> AiWishLength.MEDIUM
+                                            CardTextLength.LONG -> AiWishLength.LONG
+                                            CardTextLength.POETIC -> AiWishLength.POETIC
+                                        },
+                                        customPrompt = customAiPrompt,
+                                        cost = tokensNeeded,
+                                        onSuccess = {
+                                            Toast.makeText(
+                                                context,
+                                                "Generated ${selectedTone.displayName} greeting! Used $tokensNeeded credits 🪙",
+                                                Toast.LENGTH_SHORT
+                                            ).show()
+                                        },
+                                        onInsufficientCredits = {
+                                            showCreditDialog = true
+                                        },
+                                        onError = { err ->
+                                            Toast.makeText(context, err, Toast.LENGTH_LONG).show()
+                                        }
+                                    )
                                 },
+                                enabled = !cardAiIsGenerating,
                                 colors = ButtonDefaults.buttonColors(containerColor = HolidayCrimson),
                                 shape = RoundedCornerShape(10.dp),
                                 modifier = Modifier
@@ -1093,7 +1087,8 @@ fun CustomizeCardScreen(
                                 Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    "Generate with AI ✨ (${selectedTextLength.tokensRequired} Tokens 🪙)",
+                                    if (cardAiIsGenerating) "Generating with Gemini AI..."
+                                    else "Generate with AI ✨ (${selectedTextLength.tokensRequired} Credits 🪙)",
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 13.sp
                                 )
@@ -1142,27 +1137,40 @@ fun CustomizeCardScreen(
                                         CardTextLength.POETIC -> AiWishLength.POETIC
                                     },
                                     customPrompt = customAiPrompt,
+                                    cost = SubscriptionManager.REGENERATE_TEXT_CREDIT_COST,
                                     onSuccess = {
-                                        Toast.makeText(context, "Card text regenerated with AI! ✨", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, "Card text regenerated with AI! (15 Credits) ✨", Toast.LENGTH_SHORT).show()
+                                    },
+                                    onInsufficientCredits = {
+                                        showCreditDialog = true
+                                    },
+                                    onError = { err ->
+                                        Toast.makeText(context, err, Toast.LENGTH_LONG).show()
                                     }
                                 )
                             },
+                            enabled = !cardAiIsGenerating,
                             shape = RoundedCornerShape(10.dp),
-                            border = BorderStroke(1.dp, HolidayGold),
-                            modifier = Modifier.testTag("quick_regenerate_card_text_button")
+                            border = BorderStroke(1.2.dp, HolidayGold),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                containerColor = HolidayGold.copy(alpha = 0.14f)
+                            ),
+                            modifier = Modifier
+                                .height(48.dp)
+                                .testTag("quick_regenerate_card_text_button")
                         ) {
                             Icon(
                                 imageVector = Icons.Default.AutoAwesome,
                                 contentDescription = null,
-                                tint = HolidayGold,
-                                modifier = Modifier.size(14.dp)
+                                tint = bronzeAccent,
+                                modifier = Modifier.size(15.dp)
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = "Regenerate with AI ✨",
+                                text = if (cardAiIsGenerating) "Generating..." else "Regenerate (15 🪙)",
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = HolidayGold
+                                color = bronzeAccent
                             )
                         }
                     }
@@ -1246,7 +1254,7 @@ fun CustomizeCardScreen(
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             AlignChip(
                                 label = "Left",
-                                icon = Icons.Default.FormatAlignLeft,
+                                icon = Icons.AutoMirrored.Filled.FormatAlignLeft,
                                 isSelected = textAlign == "Left",
                                 onClick = { viewModel.updateCardTextAlign("Left") },
                                 modifier = Modifier.testTag("align_left_chip")
@@ -1260,7 +1268,7 @@ fun CustomizeCardScreen(
                             )
                             AlignChip(
                                 label = "Right",
-                                icon = Icons.Default.FormatAlignRight,
+                                icon = Icons.AutoMirrored.Filled.FormatAlignRight,
                                 isSelected = textAlign == "Right",
                                 onClick = { viewModel.updateCardTextAlign("Right") },
                                 modifier = Modifier.testTag("align_right_chip")
@@ -1410,12 +1418,15 @@ fun CustomizeCardScreen(
                             }
                             OutlinedButton(
                                 onClick = {
+                                    AppOpenAdManager.suppressNextForegroundAd()
                                     photoPickerLauncher.launch(
                                         PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
                                     )
                                 },
                                 shape = RoundedCornerShape(12.dp),
-                                modifier = Modifier.weight(1f)
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(48.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.AddPhotoAlternate,

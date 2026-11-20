@@ -165,7 +165,18 @@ fun FavoritesScreen(
                             onCopy = { ClipboardHelper.copyText(context, item.text) },
                             onShare = { ShareHelper.shareWish(context, item.text, "Holiday Wish") },
                             onRegenerate = {
-                                viewModel.regenerateFavoriteWishWithAi(item.id)
+                                viewModel.regenerateFavoriteWishWithAi(
+                                    favoriteId = item.id,
+                                    onComplete = {
+                                        android.widget.Toast.makeText(context, "Saved wish regenerated with AI! ✨", android.widget.Toast.LENGTH_SHORT).show()
+                                    },
+                                    onInsufficientCredits = {
+                                        android.widget.Toast.makeText(context, "Need 15 AI credits to regenerate! Watch an ad or upgrade to Pro.", android.widget.Toast.LENGTH_LONG).show()
+                                    },
+                                    onError = { err ->
+                                        android.widget.Toast.makeText(context, err, android.widget.Toast.LENGTH_LONG).show()
+                                    }
+                                )
                             }
                         )
                     }
@@ -244,10 +255,7 @@ private fun FavoriteItemCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Surface(
-                    onClick = {
-                        onRegenerate()
-                        android.widget.Toast.makeText(context, "Regenerated wish with AI! ✨", android.widget.Toast.LENGTH_SHORT).show()
-                    },
+                    onClick = { onRegenerate() },
                     shape = RoundedCornerShape(10.dp),
                     color = HolidayGold.copy(alpha = 0.16f),
                     border = BorderStroke(1.dp, HolidayGold.copy(alpha = 0.5f)),

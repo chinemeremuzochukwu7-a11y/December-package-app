@@ -73,7 +73,7 @@ fun ProUpgradeDialog(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
-    var selectedTierId by remember { mutableStateOf(PricingTiers.ULTIMATE_VIP.id) }
+    var selectedTierId by remember { mutableStateOf(PricingTiers.PLUS_MONTHLY.id) }
     var showNoNetworkDialog by remember { mutableStateOf(false) }
 
     Dialog(onDismissRequest = onDismiss) {
@@ -158,9 +158,9 @@ fun ProUpgradeDialog(
 
                 Text(
                     text = if (targetTemplate != null)
-                        "Get full access to '${targetTemplate.title}' and all luxury cards!"
+                        "Get full access to '${targetTemplate.title}' and all 1,000+ luxury cards!"
                     else
-                        "Bring the magic alive with exclusive holiday designs and unlimited AI wishes.",
+                        "Unlock 1,000+ luxury holiday cards, go ad-free, and get monthly AI credits.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
@@ -207,51 +207,61 @@ fun ProUpgradeDialog(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Plan 1: Monthly ($9.99/mo)
-                val monthlyTier = PricingTiers.PRO_MONTHLY
+                // Plan 1: Starter Monthly ($2.90/mo — 150 Credits/mo)
+                val starterTier = PricingTiers.STARTER_MONTHLY
                 TierSelectionCard(
-                    tierTitle = monthlyTier.title,
-                    price = monthlyTier.priceDisplay,
-                    period = "Billed Monthly • Cancel Anytime",
-                    badge = monthlyTier.badge,
+                    tierTitle = starterTier.title,
+                    price = starterTier.priceDisplay,
+                    period = "150 AI Credits/mo • Cancel Anytime",
+                    badge = starterTier.badge,
                     badgeColor = HolidayPineGreen,
-                    isSelected = selectedTierId == monthlyTier.id,
-                    onClick = { selectedTierId = monthlyTier.id },
-                    features = listOf(
-                        "🪙 300 AI Credits included each month",
-                        "Unlock 1,000+ Pro Season, Xmas & New Year cards",
-                        "Unlock 1,000+ Pro Wishes across all categories",
-                        "Remove all watermarks on cards & wishes",
-                        "100% Ad-Free Experience Across App"
-                    ),
-                    modifier = Modifier.testTag("tier_monthly_999")
+                    isSelected = selectedTierId == starterTier.id,
+                    onClick = { selectedTierId = starterTier.id },
+                    features = starterTier.features,
+                    modifier = Modifier.testTag("tier_starter_monthly")
                 )
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                // Plan 2: Yearly ($79.00/yr)
-                val yearlyTier = PricingTiers.PRO_YEARLY
+                // Plan 2: Plus Monthly ($5.90/mo — 400 Credits/mo)
+                val plusTier = PricingTiers.PLUS_MONTHLY
+                TierSelectionCard(
+                    tierTitle = plusTier.title,
+                    price = plusTier.priceDisplay,
+                    period = "400 AI Credits/mo • Cancel Anytime",
+                    badge = plusTier.badge,
+                    badgeColor = HolidayCrimson,
+                    isSelected = selectedTierId == plusTier.id,
+                    onClick = { selectedTierId = plusTier.id },
+                    features = plusTier.features,
+                    modifier = Modifier.testTag("tier_plus_monthly")
+                )
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Plan 3: Annual VIP Pass ($35.00/yr — 350 Credits/mo = 4,200/yr)
+                val yearlyTier = PricingTiers.ANNUAL_VIP
                 TierSelectionCard(
                     tierTitle = yearlyTier.title,
                     price = yearlyTier.priceDisplay,
-                    period = "Billed Annually ($6.58/mo)",
-                    badge = "⭐ SAVE 34% • UNLIMITED",
+                    period = "Billed Annually (~$2.92/mo)",
+                    badge = yearlyTier.badge,
                     badgeColor = HolidayGold,
                     isSelected = selectedTierId == yearlyTier.id,
                     onClick = { selectedTierId = yearlyTier.id },
-                    features = listOf(
-                        "✨ UNLIMITED AI Credits for 1 full year",
-                        "Save 34% compared to monthly billing",
-                        "Unlock all 1,000+ Pro Cards & Wishes",
-                        "Full HD Card Download & WhatsApp Auto-Schedule"
-                    ),
-                    modifier = Modifier.testTag("tier_yearly_79")
+                    features = yearlyTier.features,
+                    modifier = Modifier.testTag("tier_yearly_35")
                 )
 
                 Spacer(modifier = Modifier.height(18.dp))
 
                 // Primary Action Button (Purchases via Google Play Billing)
                 val isYearlySelected = selectedTierId == yearlyTier.id
+                val buttonLabel = when (selectedTierId) {
+                    yearlyTier.id -> "Subscribe Yearly ($35.00/yr • Save 51%)"
+                    plusTier.id -> "Subscribe Plus ($5.90/mo • 400 Cr)"
+                    else -> "Subscribe Starter ($2.90/mo • 150 Cr)"
+                }
                 Button(
                     onClick = {
                         val isNetAvailable = NetworkUtils.isNetworkAvailable(context)
@@ -278,13 +288,10 @@ fun ProUpgradeDialog(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = if (isYearlySelected)
-                            "Subscribe Yearly ($79.00/yr • Save 34%)"
-                        else
-                            "Subscribe Monthly ($9.99/mo)",
+                        text = buttonLabel,
                         fontWeight = FontWeight.Bold,
                         color = if (isYearlySelected) Color(0xFF332000) else Color.White,
-                        fontSize = 15.sp
+                        fontSize = 14.5.sp
                     )
                 }
 

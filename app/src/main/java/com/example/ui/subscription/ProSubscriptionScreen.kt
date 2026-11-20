@@ -66,7 +66,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.data.ads.AdMobBanner
 import com.example.data.repository.PricingTiers
 import com.example.data.subscription.SubscriptionManager
 import com.example.ui.theme.HolidayCrimson
@@ -91,11 +90,11 @@ fun ProSubscriptionScreen(
 
     var showNoNetworkDialog by remember { mutableStateOf(false) }
 
-    // Selected Pro Tier: default to Yearly for best value
-    var selectedReferenceTierId by remember { mutableStateOf(PricingTiers.PRO_YEARLY.id) }
-
-    val monthlyTier = PricingTiers.PRO_MONTHLY
-    val yearlyTier = PricingTiers.PRO_YEARLY
+    // ONLY 3 Profitable Plans: $2.90/mo (150 cr), $5.90/mo (400 cr), $35.00/yr (350 cr/mo = 4,200/yr)
+    val starterTier = PricingTiers.STARTER_MONTHLY
+    val plusTier = PricingTiers.PLUS_MONTHLY
+    val yearlyTier = PricingTiers.ANNUAL_VIP
+    var selectedReferenceTierId by remember { mutableStateOf(plusTier.id) }
 
     Scaffold(
         topBar = {
@@ -149,18 +148,6 @@ fun ProSubscriptionScreen(
                 )
             )
         },
-        bottomBar = {
-            Surface(
-                tonalElevation = 2.dp,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                AdMobBanner(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp)
-                )
-            }
-        },
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { innerPadding ->
         LazyColumn(
@@ -203,7 +190,7 @@ fun ProSubscriptionScreen(
                     )
 
                     Text(
-                        text = "Unlock exclusive luxury cards, remove all watermarks, download cards & wishes in HD, and enjoy unlimited AI wishes.",
+                        text = "Unlock 1,000+ luxury cards & wishes, remove all watermarks, download in HD, go 100% ad-free, and get generous monthly Gemini AI credits.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,
@@ -260,36 +247,49 @@ fun ProSubscriptionScreen(
                 }
             }
 
-            // Price Section: Monthly ($9.99) & Yearly ($79.00 - Save 34%)
+            // Price Section: ONLY 3 Plans ($2.90/mo, $5.90/mo, $35.00/yr)
             item {
                 Column(
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    // Plan 1: Monthly ($9.99/mo)
+                    // Plan 1: Starter Monthly ($2.90/mo — 150 AI Credits/mo)
                     ReferenceTierCard(
-                        tierTitle = monthlyTier.title,
-                        price = monthlyTier.priceDisplay,
-                        period = "Billed Monthly • Cancel Anytime",
-                        badge = monthlyTier.badge,
+                        tierTitle = starterTier.title,
+                        price = starterTier.priceDisplay,
+                        period = "Billed Monthly • 150 Credits/mo",
+                        badge = starterTier.badge,
                         badgeColor = HolidayPineGreen,
-                        isSelected = selectedReferenceTierId == monthlyTier.id,
-                        onClick = { selectedReferenceTierId = monthlyTier.id },
-                        features = monthlyTier.features,
-                        modifier = Modifier.testTag("tier_monthly_999")
+                        isSelected = selectedReferenceTierId == starterTier.id,
+                        onClick = { selectedReferenceTierId = starterTier.id },
+                        features = starterTier.features,
+                        modifier = Modifier.testTag("tier_starter_monthly")
                     )
 
-                    // Plan 2: Yearly ($79.00/yr) - Save 34%
+                    // Plan 2: Plus Monthly ($5.90/mo — 400 AI Credits/mo) [Recommended]
+                    ReferenceTierCard(
+                        tierTitle = plusTier.title,
+                        price = plusTier.priceDisplay,
+                        period = "Billed Monthly • 400 Credits/mo",
+                        badge = plusTier.badge,
+                        badgeColor = HolidayCrimson,
+                        isSelected = selectedReferenceTierId == plusTier.id,
+                        onClick = { selectedReferenceTierId = plusTier.id },
+                        features = plusTier.features,
+                        modifier = Modifier.testTag("tier_plus_monthly")
+                    )
+
+                    // Plan 3: Annual VIP Pass ($35.00/yr — 350 AI Credits/mo = 4,200/yr)
                     ReferenceTierCard(
                         tierTitle = yearlyTier.title,
                         price = yearlyTier.priceDisplay,
-                        period = "Billed Annually ($6.58/mo)",
+                        period = "Billed Annually (~$2.92/mo)",
                         badge = yearlyTier.badge,
                         badgeColor = HolidayGold,
                         isSelected = selectedReferenceTierId == yearlyTier.id,
                         onClick = { selectedReferenceTierId = yearlyTier.id },
                         features = yearlyTier.features,
-                        modifier = Modifier.testTag("tier_yearly_79")
+                        modifier = Modifier.testTag("tier_yearly_35")
                     )
                 }
             }
@@ -302,7 +302,12 @@ fun ProSubscriptionScreen(
                         .padding(top = 8.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    val isYearlySelected = selectedReferenceTierId == yearlyTier.id
+                    val selectedTier = when (selectedReferenceTierId) {
+                        yearlyTier.id -> yearlyTier
+                        plusTier.id -> plusTier
+                        else -> starterTier
+                    }
+                    val isYearlySelected = selectedTier.id == yearlyTier.id
 
                     // Primary Action Button
                     Button(
@@ -318,10 +323,10 @@ fun ProSubscriptionScreen(
                             if (activity != null) {
                                 SubscriptionManager.purchaseByProductId(
                                     activity = activity,
-                                    productId = selectedReferenceTierId,
+                                    productId = selectedTier.id,
                                     onSuccess = {
                                         scope.launch {
-                                            snackbarHostState.showSnackbar("🎉 Welcome to ${if (isYearlySelected) yearlyTier.title else monthlyTier.title}! Pro Activated.")
+                                            snackbarHostState.showSnackbar("🎉 Welcome to ${selectedTier.title}! Pro Activated.")
                                         }
                                     },
                                     onError = { err ->
@@ -355,14 +360,16 @@ fun ProSubscriptionScreen(
                                 tint = if (isYearlySelected) Color(0xFF332000) else Color.White
                             )
                             Spacer(modifier = Modifier.width(8.dp))
+                            val buttonLabel = when (selectedTier.id) {
+                                yearlyTier.id -> "Subscribe Yearly ($35.00/yr • Save 51%)"
+                                plusTier.id -> "Subscribe Plus ($5.90/mo • 400 Cr)"
+                                else -> "Subscribe Starter ($2.90/mo • 150 Cr)"
+                            }
                             Text(
-                                text = if (isYearlySelected)
-                                    "Subscribe Yearly ($79.00/yr • Save 34%)"
-                                else
-                                    "Subscribe Monthly ($9.99/mo)",
+                                text = buttonLabel,
                                 fontWeight = FontWeight.Bold,
                                 color = if (isYearlySelected) Color(0xFF332000) else Color.White,
-                                fontSize = 16.sp
+                                fontSize = 15.5.sp
                             )
                         }
                     }

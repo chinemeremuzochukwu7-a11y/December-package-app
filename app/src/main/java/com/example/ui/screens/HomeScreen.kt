@@ -220,7 +220,7 @@ fun HomeScreen(
                             Text(text = if (isPro) "👑" else "★", fontSize = 13.sp)
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = if (isPro) "PRO ACTIVE • VIP PASS" else "Upgrade to Pro Pass ($9.99/mo)",
+                                text = if (isPro) "PRO ACTIVE • VIP PASS" else "Upgrade to Pro Pass (from $2.90/mo)",
                                 fontSize = 11.5.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = if (isPro) HolidayGold else HolidayCrimson
@@ -277,7 +277,7 @@ fun HomeScreen(
                                             )
                                         )
                                         Text(
-                                            text = "Yearly & Monthly plans • VIP Cards & Unlimited AI",
+                                            text = "Plans from $2.90/mo • VIP Cards & 150–400 AI Cr/mo",
                                             style = MaterialTheme.typography.bodySmall.copy(
                                                 color = Color.White.copy(alpha = 0.9f)
                                             )
@@ -388,7 +388,19 @@ fun HomeScreen(
                         isFavorite = favoriteIds.contains(wish.id),
                         onToggleFavorite = { viewModel.toggleFavorite(wish) },
                         onRegenerate = {
-                            viewModel.regenerateWishWithAi(wish)
+                            viewModel.regenerateWishWithAi(
+                                wish = wish,
+                                onComplete = {
+                                    android.widget.Toast.makeText(context, "Wish regenerated with AI! ✨", android.widget.Toast.LENGTH_SHORT).show()
+                                },
+                                onInsufficientCredits = {
+                                    android.widget.Toast.makeText(context, "Need 15 AI credits to regenerate! Watch an ad or upgrade to Pro.", android.widget.Toast.LENGTH_LONG).show()
+                                    onNavigateToPro()
+                                },
+                                onError = { err ->
+                                    android.widget.Toast.makeText(context, err, android.widget.Toast.LENGTH_LONG).show()
+                                }
+                            )
                         }
                     )
                 }
@@ -417,7 +429,19 @@ fun HomeScreen(
                         isFavorite = favoriteIds.contains(wish.id),
                         onToggleFavorite = { viewModel.toggleFavorite(wish) },
                         onRegenerate = {
-                            viewModel.regenerateWishWithAi(wish)
+                            viewModel.regenerateWishWithAi(
+                                wish = wish,
+                                onComplete = {
+                                    android.widget.Toast.makeText(context, "Wish regenerated with AI! ✨", android.widget.Toast.LENGTH_SHORT).show()
+                                },
+                                onInsufficientCredits = {
+                                    android.widget.Toast.makeText(context, "Need 15 AI credits to regenerate! Watch an ad or upgrade to Pro.", android.widget.Toast.LENGTH_LONG).show()
+                                    onNavigateToPro()
+                                },
+                                onError = { err ->
+                                    android.widget.Toast.makeText(context, err, android.widget.Toast.LENGTH_LONG).show()
+                                }
+                            )
                         }
                     )
                 }
@@ -441,7 +465,19 @@ fun HomeScreen(
                     isFavorite = favoriteIds.contains(wish.id),
                     onToggleFavorite = { viewModel.toggleFavorite(wish) },
                     onRegenerate = {
-                        viewModel.regenerateWishWithAi(wish)
+                        viewModel.regenerateWishWithAi(
+                            wish = wish,
+                            onComplete = {
+                                android.widget.Toast.makeText(context, "Wish regenerated with AI! ✨", android.widget.Toast.LENGTH_SHORT).show()
+                            },
+                            onInsufficientCredits = {
+                                android.widget.Toast.makeText(context, "Need 15 AI credits to regenerate! Watch an ad or upgrade to Pro.", android.widget.Toast.LENGTH_LONG).show()
+                                onNavigateToPro()
+                            },
+                            onError = { err ->
+                                android.widget.Toast.makeText(context, err, android.widget.Toast.LENGTH_LONG).show()
+                            }
+                        )
                     }
                 )
             }
@@ -1009,10 +1045,7 @@ private fun HomeWishHorizontalCard(
             ) {
                 if (onRegenerate != null) {
                     IconButton(
-                        onClick = {
-                            onRegenerate()
-                            android.widget.Toast.makeText(context, "Wish regenerated with AI! ✨", android.widget.Toast.LENGTH_SHORT).show()
-                        },
+                        onClick = { onRegenerate() },
                         modifier = Modifier.size(32.dp).testTag("regenerate_home_wish_${wish.id}")
                     ) {
                         Icon(

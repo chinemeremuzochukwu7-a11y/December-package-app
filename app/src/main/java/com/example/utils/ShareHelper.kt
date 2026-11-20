@@ -4,12 +4,18 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import com.example.data.ads.AdManager
+import com.example.data.ads.AppOpenAdManager
 import com.example.data.subscription.SubscriptionManager
 import com.example.model.CardOccasion
 import com.example.model.CardTemplate
 
 object ShareHelper {
-    fun shareWish(context: Context, wishText: String, subject: String = "Holiday Wish") {
+    fun shareWish(
+        context: Context,
+        wishText: String,
+        subject: String = "Holiday Wish",
+        skipAdCheck: Boolean = false
+    ) {
         val isPro = SubscriptionManager.isPro.value
         val finalWishText = if (isPro) {
             wishText
@@ -22,6 +28,7 @@ object ShareHelper {
         }
 
         val doShare = {
+            AppOpenAdManager.suppressNextForegroundAd()
             val sendIntent = Intent().apply {
                 action = Intent.ACTION_SEND
                 putExtra(Intent.EXTRA_TEXT, finalWishText)
@@ -32,16 +39,18 @@ object ShareHelper {
             context.startActivity(shareIntent)
         }
 
-        if (isPro) {
+        if (isPro || skipAdCheck) {
             doShare()
         } else {
             val activity = context as? Activity
             if (activity != null) {
-                // Free users must watch rewarded ad before sharing (+1 credit earned)
+                var rewardEarned = false
                 AdManager.showRewardedAd(
                     activity = activity,
-                    onRewardEarned = { /* 1 credit added */ },
-                    onDismiss = { doShare() }
+                    onRewardEarned = { rewardEarned = true },
+                    onDismiss = {
+                        if (rewardEarned) doShare() else doShare()
+                    }
                 )
             } else {
                 doShare()
@@ -58,7 +67,8 @@ object ShareHelper {
         template: CardTemplate? = null,
         fontStyle: String = "Classic",
         photoUri: String? = null,
-        exportSize: CardExportSize = CardExportSize.CLASSIC_GREETING
+        exportSize: CardExportSize = CardExportSize.CLASSIC_GREETING,
+        skipAdCheck: Boolean = false
     ) {
         val isPro = SubscriptionManager.isPro.value
         val fullCardText = buildString {
@@ -96,10 +106,12 @@ object ShareHelper {
         )
 
         val doShare = {
+            AppOpenAdManager.suppressNextForegroundAd()
             CardImageExporter.shareCardImage(context, bitmap, title, fullCardText)
         }
 
-        if (isPro) {
+        val isTemplateProLocked = cardTemplate.isPro && !isPro
+        if (isPro || skipAdCheck || !isTemplateProLocked) {
             doShare()
         } else {
             val activity = context as? Activity

@@ -254,9 +254,18 @@ fun MyCardsScreen(
                             )
                         },
                         onRegenerateText = {
-                            viewModel.regenerateSavedCardTextWithAi(cardEntity.id) {
-                                Toast.makeText(context, "Card text regenerated with AI! ✨", Toast.LENGTH_SHORT).show()
-                            }
+                            viewModel.regenerateSavedCardTextWithAi(
+                                cardId = cardEntity.id,
+                                onComplete = {
+                                    Toast.makeText(context, "Card text regenerated with AI! ✨", Toast.LENGTH_SHORT).show()
+                                },
+                                onInsufficientCredits = {
+                                    Toast.makeText(context, "Need 15 AI credits to regenerate! Watch an ad or upgrade to Pro.", Toast.LENGTH_LONG).show()
+                                },
+                                onError = { err ->
+                                    Toast.makeText(context, err, Toast.LENGTH_LONG).show()
+                                }
+                            )
                         },
                         onSaveImageClick = {
                             if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P) {
@@ -393,9 +402,18 @@ fun MyCardsScreen(
                                 ) {
                                     Surface(
                                         onClick = {
-                                            viewModel.regenerateFavoriteWishWithAi(wish.id) {
-                                                Toast.makeText(context, "Saved wish regenerated with AI! ✨", Toast.LENGTH_SHORT).show()
-                                            }
+                                            viewModel.regenerateFavoriteWishWithAi(
+                                                favoriteId = wish.id,
+                                                onComplete = {
+                                                    Toast.makeText(context, "Saved wish regenerated with AI! ✨", Toast.LENGTH_SHORT).show()
+                                                },
+                                                onInsufficientCredits = {
+                                                    Toast.makeText(context, "Need 15 AI credits to regenerate! Watch an ad or upgrade to Pro.", Toast.LENGTH_LONG).show()
+                                                },
+                                                onError = { err ->
+                                                    Toast.makeText(context, err, Toast.LENGTH_LONG).show()
+                                                }
+                                            )
                                         },
                                         shape = RoundedCornerShape(10.dp),
                                         color = HolidayGold.copy(alpha = 0.16f),
